@@ -58,6 +58,12 @@ try:
 except ImportError:
     ADVANCED_AVAILABLE = False
 
+try:
+    from dashboard.tools_page import render_tools_page
+    TOOLS_AVAILABLE = True
+except ImportError:
+    TOOLS_AVAILABLE = False
+
 
 # 페이지 설정
 st.set_page_config(
@@ -545,10 +551,11 @@ def main():
         "📈 백테스트",
         "🤖 AI 분석",
         "🇰🇷 한국 주식",
-        "🔧 고급 기능"
+        "🔧 고급 기능",
+        "🛠️ 투자 도구"
     ]
     tabs = st.tabs(tab_names)
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = tabs
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = tabs
 
     # ========== 탭 1: 종합 예측 ==========
     with tab1:
@@ -852,6 +859,14 @@ def main():
         else:
             st.warning("고급 기능 모듈을 사용할 수 없습니다.")
             st.info("advanced_features 모듈을 확인하세요.")
+
+    # ========== 탭 11: 투자 도구 ==========
+    with tab11:
+        if TOOLS_AVAILABLE:
+            render_tools_page()
+        else:
+            st.warning("투자 도구 모듈을 사용할 수 없습니다.")
+            st.info("tools_page 모듈을 확인하세요.")
 
     # 푸터
     st.divider()
