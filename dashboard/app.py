@@ -92,6 +92,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# yfinance import
+try:
+    import yfinance as yf
+    YFINANCE_AVAILABLE = True
+except ImportError:
+    YFINANCE_AVAILABLE = False
+
+
 @st.cache_data(ttl=3600)
 def load_sample_data():
     """샘플 데이터 로드 (캐시됨)"""
@@ -101,6 +109,71 @@ def load_sample_data():
         'fund_flow': get_sample_fund_flow(),
         'news': get_sample_news(),
     }
+
+
+@st.cache_data(ttl=300)  # 5분 캐시
+def load_realtime_data():
+    """yfinance로 실시간 데이터 로드"""
+    if not YFINANCE_AVAILABLE:
+        return None
+
+    try:
+        # 주요 지수/ETF 심볼
+        symbols = {
+            'sp500': '^GSPC',
+            'nasdaq': '^IXIC',
+            'dow': '^DJI',
+            'vix': '^VIX',
+            'gold': 'GC=F',
+            'oil': 'CL=F',
+            'usd_index': 'DX-Y.NYB',
+            'us10y': '^TNX',
+        }
+
+        # 데이터 다운로드 (6개월)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=180)
+
+        market_data = pd.DataFrame()
+
+        for name, symbol in symbols.items():
+            try:
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(start=start_date, end=end_date)
+                if not hist.empty:
+                    market_data[name] = hist['Close']
+            except Exception:
+                pass
+
+        if market_data.empty:
+            return None
+
+        # 매크로 데이터 (샘플 + 실시간 VIX/금리)
+        macro_data = get_sample_macro_data()
+
+        # VIX 최신값 반영
+        if 'vix' in market_data.columns and not market_data['vix'].empty:
+            latest_vix = market_data['vix'].iloc[-1]
+            if 'vix' in macro_data.columns:
+                macro_data.loc[macro_data.index[-1], 'vix'] = latest_vix
+
+        # 10년물 금리 반영
+        if 'us10y' in market_data.columns and not market_data['us10y'].empty:
+            latest_10y = market_data['us10y'].iloc[-1]
+            if 'interest_rate' in macro_data.columns:
+                macro_data.loc[macro_data.index[-1], 'interest_rate'] = latest_10y
+
+        return {
+            'macro': macro_data,
+            'market': market_data,
+            'fund_flow': get_sample_fund_flow(),  # 자금흐름은 샘플 사용
+            'news': get_sample_news(),  # 뉴스는 샘플 사용
+            'realtime': True,
+        }
+
+    except Exception as e:
+        st.error(f"실시간 데이터 로드 실패: {e}")
+        return None
 
 
 def create_gauge_chart(value: float, title: str, min_val: float = 0, max_val: float = 100):
@@ -271,8 +344,18 @@ def main():
     if data_source == "샘플 데이터":
         data = load_sample_data()
     else:
-        st.warning("실시간 데이터는 API 키가 필요합니다. 샘플 데이터를 사용합니다.")
-        data = load_sample_data()
+        # 실시간 데이터 시도
+        if YFINANCE_AVAILABLE:
+            with st.spinner("실시간 데이터 로딩 중..."):
+                data = load_realtime_data()
+            if data:
+                st.success("✅ 실시간 데이터 로드 완료!")
+            else:
+                st.warning("실시간 데이터 로드 실패. 샘플 데이터를 사용합니다.")
+                data = load_sample_data()
+        else:
+            st.warning("yfinance가 설치되지 않았습니다. 샘플 데이터를 사용합니다.")
+            data = load_sample_data()
 
     # 분석기 초기화
     macro_analyzer = MacroAnalyzer()
