@@ -289,14 +289,15 @@ def render_korea_page():
         # API 키 설정
         with st.expander("🔑 한국은행 API 키 설정"):
             bok_key = st.text_input("BOK API Key", type="password",
-                                    help="한국은행 경제통계시스템에서 발급받을 수 있습니다.")
-            if st.button("API 키 적용"):
+                                    help="한국은행 경제통계시스템에서 발급받을 수 있습니다.",
+                                    key="bok_api_key_input")
+            if st.button("API 키 적용", key="bok_api_apply"):
                 if bok_key:
                     os.environ['BOK_API_KEY'] = bok_key
                     st.success("BOK API 키가 적용되었습니다.")
                     st.rerun()
 
-        if st.button("📊 경제 리포트 생성"):
+        if st.button("📊 경제 리포트 생성", key="bok_report_btn"):
             with st.spinner("경제 지표를 분석하고 있습니다..."):
                 report = bok.get_korean_economy_report()
                 st.text(report)

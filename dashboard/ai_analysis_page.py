@@ -45,11 +45,13 @@ def render_ai_analysis_page():
     # API 키 설정
     with st.expander("🔑 API 키 설정"):
         openai_key = st.text_input("OpenAI API Key", type="password",
-                                   help="GPT 분석을 위해 필요합니다.")
+                                   help="GPT 분석을 위해 필요합니다.",
+                                   key="openai_api_key_input")
         news_key = st.text_input("News API Key", type="password",
-                                 help="더 많은 뉴스 소스를 위해 선택적으로 사용됩니다.")
+                                 help="더 많은 뉴스 소스를 위해 선택적으로 사용됩니다.",
+                                 key="news_api_key_input")
 
-        if st.button("API 키 적용"):
+        if st.button("API 키 적용", key="ai_api_apply"):
             if openai_key:
                 os.environ['OPENAI_API_KEY'] = openai_key
                 st.success("OpenAI API 키가 적용되었습니다.")
