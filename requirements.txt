@@ -25,3 +25,9 @@ plotly>=5.18.0
 # Utilities
 python-dotenv>=1.0.0
 schedule>=1.2.0
+
+# AI Analysis (GPT)
+openai>=1.6.0
+
+# Korean Stocks (KRX)
+pykrx>=1.0.45
