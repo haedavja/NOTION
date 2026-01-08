@@ -308,87 +308,90 @@ def render_portfolio_input():
     # ===== 새 포지션 추가 =====
     st.subheader("➕ 새 포지션 추가")
 
-    # 종목 검색 (폼 밖에서)
-    stock_query = st.text_input(
-        "🔍 종목 검색",
-        placeholder="종목명 또는 티커 입력 (예: 현대차, 삼성전자, AAPL, TSLA)",
-        key="stock_query"
-    )
+    # 종목 검색
+    col_search, col_btn = st.columns([4, 1])
+    with col_search:
+        stock_query = st.text_input(
+            "종목 검색",
+            placeholder="현대차, 삼성전자, AAPL, TSLA 등",
+            key="stock_query",
+            label_visibility="collapsed"
+        )
+    with col_btn:
+        search_btn = st.button("🔍 검색", key="search_stock_btn", use_container_width=True)
 
-    # 자동 검색
-    if stock_query and len(stock_query) >= 2:
-        if st.session_state.searched_stock is None or st.session_state.searched_stock.get('query') != stock_query:
-            with st.spinner(f"'{stock_query}' 검색 중..."):
-                info = search_stock(stock_query)
-                if info:
-                    st.session_state.searched_stock = {**info, 'query': stock_query}
-                else:
-                    st.session_state.searched_stock = {'query': stock_query, 'error': True}
-
-    # 검색 결과 표시
-    searched = st.session_state.searched_stock
-    if searched and searched.get('query') == stock_query:
-        if searched.get('error'):
-            st.error(f"❌ '{stock_query}' 종목을 찾을 수 없습니다.")
-        else:
-            # 통화에 따른 가격 표시
-            price = searched['current_price']
-            currency = searched.get('currency', 'USD')
-            if currency == 'KRW':
-                price_str = f"₩{price:,.0f}"
+    # 검색 버튼 클릭 시
+    if search_btn and stock_query:
+        with st.spinner(f"'{stock_query}' 검색 중..."):
+            info = search_stock(stock_query)
+            if info:
+                st.session_state.searched_stock = info
             else:
-                price_str = f"${price:,.2f} (₩{price * st.session_state.exchange_rate:,.0f})"
+                st.session_state.searched_stock = None
+                st.error(f"❌ '{stock_query}' 종목을 찾을 수 없습니다.")
 
-            st.success(f"✅ **{searched['name']}** ({searched['symbol']}) | 현재가: {price_str}")
+    # 검색 결과가 있으면 표시
+    if st.session_state.searched_stock:
+        info = st.session_state.searched_stock
+        price = info['current_price']
+        currency = info.get('currency', 'USD')
 
-            # 빠른 추가 폼
-            with st.form("quick_add_form", clear_on_submit=True):
-                col1, col2, col3 = st.columns(3)
+        # 가격 표시
+        if currency == 'KRW':
+            price_str = f"₩{price:,.0f}"
+        else:
+            price_str = f"${price:,.2f} (₩{price * st.session_state.exchange_rate:,.0f})"
 
-                with col1:
-                    quantity = st.number_input("수량", min_value=1.0, value=10.0, step=1.0, key="q_qty")
-                    avg_cost = st.number_input("매수가", min_value=0.01, value=float(price), step=1.0, key="q_cost")
+        st.success(f"✅ **{info['name']}** ({info['symbol']}) | 현재가: **{price_str}**")
 
-                with col2:
-                    target_pct = st.number_input("목표 수익률 (%)", min_value=0.0, value=20.0, step=5.0, key="q_target")
-                    stop_loss_pct = st.number_input("손절 비율 (%)", min_value=0.0, value=10.0, step=1.0, key="q_stop")
+        # 포지션 추가 폼
+        with st.form("add_position_form", clear_on_submit=True):
+            col1, col2, col3 = st.columns(3)
 
-                with col3:
-                    thesis_type = st.selectbox("투자 논리", [t.value for t in InvestmentThesis], key="q_thesis")
-                    time_horizon = st.selectbox("투자 기간", ["단기", "중기", "장기"], key="q_horizon")
+            with col1:
+                quantity = st.number_input("수량", min_value=1.0, value=10.0, step=1.0)
+                # 매수가 기본값 = 현재가
+                avg_cost = st.number_input("매수가", min_value=0.01, value=float(price), step=0.01, format="%.2f")
 
-                # 목표가/손절가 미리보기
-                if avg_cost > 0:
-                    target_p = avg_cost * (1 + target_pct / 100)
-                    stop_p = avg_cost * (1 - stop_loss_pct / 100)
-                    if currency == 'KRW':
-                        st.caption(f"목표가: ₩{target_p:,.0f} | 손절가: ₩{stop_p:,.0f}")
-                    else:
-                        st.caption(f"목표가: ${target_p:,.2f} | 손절가: ${stop_p:,.2f}")
+            with col2:
+                target_pct = st.number_input("목표 수익률 (%)", min_value=0.0, value=20.0, step=5.0)
+                stop_loss_pct = st.number_input("손절 비율 (%)", min_value=0.0, value=10.0, step=1.0)
 
-                if st.form_submit_button("✅ 포지션 추가", use_container_width=True, type="primary"):
-                    thesis_enum = next((t for t in InvestmentThesis if t.value == thesis_type), InvestmentThesis.OTHER)
+            with col3:
+                thesis_type = st.selectbox("투자 논리", [t.value for t in InvestmentThesis])
+                time_horizon = st.selectbox("투자 기간", ["단기", "중기", "장기"])
 
-                    position = Position(
-                        symbol=searched['symbol'],
-                        name=searched['name'],
-                        quantity=quantity,
-                        avg_cost=avg_cost,
-                        current_price=price,
-                        asset_type=AssetType.STOCK,
-                        thesis_type=thesis_enum,
-                        thesis_description="",
-                        target_price=avg_cost * (1 + target_pct / 100) if target_pct > 0 else None,
-                        stop_loss=avg_cost * (1 - stop_loss_pct / 100) if stop_loss_pct > 0 else None,
-                        time_horizon=time_horizon,
-                    )
+            # 목표가/손절가 미리보기
+            target_p = avg_cost * (1 + target_pct / 100)
+            stop_p = avg_cost * (1 - stop_loss_pct / 100)
+            if currency == 'KRW':
+                st.caption(f"📊 목표가: ₩{target_p:,.0f} (+{target_pct:.0f}%) | 손절가: ₩{stop_p:,.0f} (-{stop_loss_pct:.0f}%)")
+            else:
+                st.caption(f"📊 목표가: ${target_p:,.2f} (+{target_pct:.0f}%) | 손절가: ${stop_p:,.2f} (-{stop_loss_pct:.0f}%)")
 
-                    st.session_state.portfolio.add_position(position)
-                    st.session_state.searched_stock = None
-                    st.success(f"✅ {searched['symbol']} 추가 완료!")
-                    st.rerun()
+            if st.form_submit_button("✅ 포지션 추가", use_container_width=True, type="primary"):
+                thesis_enum = next((t for t in InvestmentThesis if t.value == thesis_type), InvestmentThesis.OTHER)
+
+                position = Position(
+                    symbol=info['symbol'],
+                    name=info['name'],
+                    quantity=quantity,
+                    avg_cost=avg_cost,
+                    current_price=price,
+                    asset_type=AssetType.STOCK,
+                    thesis_type=thesis_enum,
+                    thesis_description="",
+                    target_price=target_p if target_pct > 0 else None,
+                    stop_loss=stop_p if stop_loss_pct > 0 else None,
+                    time_horizon=time_horizon,
+                )
+
+                st.session_state.portfolio.add_position(position)
+                st.session_state.searched_stock = None
+                st.success(f"✅ {info['symbol']} 추가 완료!")
+                st.rerun()
     else:
-        st.info("💡 종목명(현대차, 삼성전자) 또는 티커(AAPL, TSLA)를 입력하세요")
+        st.info("💡 종목명(현대차, 삼성) 또는 티커(AAPL, TSLA)를 입력하고 검색 버튼을 누르세요")
 
     return st.session_state.portfolio
 
