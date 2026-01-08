@@ -865,16 +865,20 @@ class ThesisEvaluator:
                 matched_theme_key = theme_key
                 break
 
-        # 신뢰도 간략 표시 (신뢰도만, 출처는 숨김)
-        def conf_icon(conf: int) -> str:
+        # 신뢰도 배지 (숫자 + 아이콘 + 출처 숨김)
+        def conf_badge(conf: int, source: str = '') -> str:
             if conf >= 90:
-                return "🟢"
+                icon = "🟢"
             elif conf >= 70:
-                return "🟡"
+                icon = "🟡"
             elif conf >= 50:
-                return "🟠"
+                icon = "🟠"
             else:
-                return "🔴"
+                icon = "🔴"
+            # 출처는 {{source}} 형식으로 숨김 (UI에서 파싱)
+            if source:
+                return f"{icon}{conf}%{{{{출처:{source}}}}}"
+            return f"{icon}{conf}%"
 
         # 로봇/신사업 관련
         if any(kw in thesis_lower for kw in ['로봇', 'robot', '신사업', '미래', '새로운', '대세']):
@@ -882,18 +886,21 @@ class ThesisEvaluator:
             if matched_theme and matched_theme_key in ['로봇', 'robot']:
                 analysis = f"🤖 **{name} 로봇 사업 분석**\n\n"
 
-                # 자회사/핵심 정보 (신뢰도만)
+                # 자회사/핵심 정보 (신뢰도+출처)
                 if 'subsidiary' in matched_theme:
                     conf = matched_theme.get('subsidiary_confidence', 0)
-                    analysis += f"• **핵심 자회사**: {matched_theme['subsidiary']} {conf_icon(conf)}\n"
+                    src = matched_theme.get('subsidiary_source', '')
+                    analysis += f"• **핵심 자회사**: {matched_theme['subsidiary']} {conf_badge(conf, src)}\n"
 
                 if 'acquisition' in matched_theme:
                     conf = matched_theme.get('acquisition_confidence', 0)
-                    analysis += f"• **인수 정보**: {matched_theme['acquisition']} {conf_icon(conf)}\n"
+                    src = matched_theme.get('acquisition_source', '')
+                    analysis += f"• **인수 정보**: {matched_theme['acquisition']} {conf_badge(conf, src)}\n"
 
                 if 'products' in matched_theme:
                     conf = matched_theme.get('products_confidence', 0)
-                    analysis += f"• **주요 제품**: {', '.join(matched_theme['products'])} {conf_icon(conf)}\n"
+                    src = matched_theme.get('products_source', '')
+                    analysis += f"• **주요 제품**: {', '.join(matched_theme['products'])} {conf_badge(conf, src)}\n"
 
                 analysis += "\n"
 
@@ -905,35 +912,38 @@ class ThesisEvaluator:
                 if 'key_question' in matched_theme:
                     analysis += f"❓ **핵심 질문**: {matched_theme['key_question']}\n\n"
 
-                # 현실 체크 (간결하게)
+                # 현실 체크
                 if 'revenue_contribution' in matched_theme:
                     conf = matched_theme.get('revenue_confidence', 0)
-                    analysis += f"⚠️ **현실**: {matched_theme['revenue_contribution']} {conf_icon(conf)}\n\n"
+                    src = matched_theme.get('revenue_source', '')
+                    analysis += f"⚠️ **현실**: {matched_theme['revenue_contribution']} {conf_badge(conf, src)}\n\n"
 
                 # 경쟁 구도
                 if 'competitors' in matched_theme:
                     analysis += f"🏁 **경쟁**: {', '.join(matched_theme['competitors'])}\n\n"
 
-                # 리스크 (간결하게)
+                # 리스크
                 risks = matched_theme.get('risks', [])
                 if risks:
                     risk_items = []
                     for r in risks:
                         if isinstance(r, dict):
                             conf = r.get('confidence', 0)
-                            risk_items.append(f"{r['risk']} {conf_icon(conf)}")
+                            src = r.get('source', '')
+                            risk_items.append(f"{r['risk']} {conf_badge(conf, src)}")
                         else:
                             risk_items.append(r)
                     analysis += f"⚠️ **리스크**: {' | '.join(risk_items)}\n\n"
 
-                # 촉매 (간결하게)
+                # 촉매
                 catalysts = matched_theme.get('catalysts', [])
                 if catalysts:
                     cat_items = []
                     for c in catalysts:
                         if isinstance(c, dict):
                             conf = c.get('confidence', 0)
-                            cat_items.append(f"{c['catalyst']} {conf_icon(conf)}")
+                            src = c.get('source', '')
+                            cat_items.append(f"{c['catalyst']} {conf_badge(conf, src)}")
                         else:
                             cat_items.append(c)
                     analysis += f"🎯 **촉매**: {' | '.join(cat_items)}"

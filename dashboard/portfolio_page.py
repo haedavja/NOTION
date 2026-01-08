@@ -766,8 +766,55 @@ def render_thesis_evaluation(portfolio: Portfolio):
 
                 # 권고사항
                 st.markdown("### 💡 권고사항")
+
+                def render_with_clickable_confidence(text):
+                    """신뢰도 배지를 클릭 가능한 HTML로 변환"""
+                    import re
+                    # 패턴: 🟢85%{{출처:xxx}} 또는 🟡70%{{출처:xxx}}
+                    pattern = r'([🟢🟡🟠🔴])(\d+)%\{\{출처:([^}]+)\}\}'
+
+                    def replace_badge(match):
+                        icon = match.group(1)
+                        conf = match.group(2)
+                        source = match.group(3)
+                        # 배경색
+                        if icon == '🟢':
+                            bg = '#d4edda'
+                        elif icon == '🟡':
+                            bg = '#fff3cd'
+                        elif icon == '🟠':
+                            bg = '#ffe0b2'
+                        else:
+                            bg = '#f8d7da'
+                        return f'<span title="출처: {source}" style="background:{bg};padding:1px 5px;border-radius:3px;font-size:0.85em;cursor:help;">{icon}{conf}%</span>'
+
+                    # 출처 없는 패턴도 처리: 🟢85%
+                    pattern_no_source = r'([🟢🟡🟠🔴])(\d+)%(?!\{)'
+
+                    def replace_badge_no_source(match):
+                        icon = match.group(1)
+                        conf = match.group(2)
+                        if icon == '🟢':
+                            bg = '#d4edda'
+                        elif icon == '🟡':
+                            bg = '#fff3cd'
+                        elif icon == '🟠':
+                            bg = '#ffe0b2'
+                        else:
+                            bg = '#f8d7da'
+                        return f'<span style="background:{bg};padding:1px 5px;border-radius:3px;font-size:0.85em;">{icon}{conf}%</span>'
+
+                    result = re.sub(pattern, replace_badge, text)
+                    result = re.sub(pattern_no_source, replace_badge_no_source, result)
+                    return result
+
                 for rec in evaluation.recommendations:
-                    display_item_with_metadata(rec, 'info')
+                    # 마크다운 블록은 HTML로 변환하여 표시
+                    if '\n' in rec:
+                        processed = render_with_clickable_confidence(rec)
+                        st.markdown(processed, unsafe_allow_html=True)
+                    else:
+                        display_item_with_metadata(rec, 'info')
 
             except Exception as e:
                 st.error(f"분석 중 오류 발생: {e}")
