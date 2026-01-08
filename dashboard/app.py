@@ -27,6 +27,11 @@ from analysis.technical import TechnicalAnalyzer
 from prediction.probability_model import ProbabilityModel
 from prediction.scenarios import ScenarioAnalyzer
 
+# 포트폴리오 모듈
+from portfolio.portfolio import Portfolio, Position, create_sample_portfolio
+from portfolio.analyzer import PortfolioAnalyzer
+from portfolio.thesis_evaluator import ThesisEvaluator, ThesisRating
+
 
 # 페이지 설정
 st.set_page_config(
@@ -324,12 +329,13 @@ def main():
     st.divider()
 
     # 탭 구성
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🎯 종합 예측",
         "🌐 거시경제",
         "💹 자금흐름",
         "📰 센티먼트",
-        "📊 기술적 분석"
+        "📊 기술적 분석",
+        "💼 포트폴리오 분석"
     ])
 
     # ========== 탭 1: 종합 예측 ==========
@@ -588,6 +594,11 @@ def main():
         with col2:
             st.metric("최근접 지지선", f"{sr.get('nearest_support', 'N/A')}")
             st.caption(f"거리: {sr.get('distance_to_support', 'N/A')}%")
+
+    # ========== 탭 6: 포트폴리오 분석 ==========
+    with tab6:
+        from dashboard.portfolio_page import render_portfolio_page
+        render_portfolio_page()
 
     # 푸터
     st.divider()
