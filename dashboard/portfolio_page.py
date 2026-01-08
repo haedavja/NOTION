@@ -657,13 +657,19 @@ def render_thesis_evaluation(portfolio: Portfolio):
                             else:
                                 conf_color = "🔴"
 
-                            # popover로 출처 표시 (클릭 시 펼침)
-                            with st.popover(f"{conf_color} {confidence}%"):
-                                st.caption(f"**신뢰도**: {confidence}%")
-                                if source:
-                                    st.caption(f"**출처**: {source}")
-                                else:
-                                    st.caption("*출처 정보 없음*")
+                            # popover 사용 (Streamlit 1.31+), 없으면 expander
+                            if hasattr(st, 'popover'):
+                                with st.popover(f"{conf_color} {confidence}%"):
+                                    st.markdown(f"**신뢰도**: {confidence}%")
+                                    if source:
+                                        st.markdown(f"**출처**: {source}")
+                                    else:
+                                        st.caption("*출처 정보 없음*")
+                            else:
+                                with st.expander(f"{conf_color} {confidence}%"):
+                                    st.markdown(f"**신뢰도**: {confidence}%")
+                                    if source:
+                                        st.markdown(f"**출처**: {source}")
                     else:
                         if item_type == 'success':
                             st.success(main_text)
