@@ -612,15 +612,62 @@ def render_thesis_evaluation(portfolio: Portfolio):
                 # 강점/약점
                 col1, col2 = st.columns(2)
 
+                def parse_metadata(text):
+                    """텍스트에서 신뢰도/출처 메타데이터 분리"""
+                    import re
+                    # 패턴: (신뢰도 XX%) 또는 [출처: XXX] 또는 (출처: XXX)
+                    conf_match = re.search(r'\(신뢰도\s*(\d+)%\)', text)
+                    source_match = re.search(r'[\[\(]출처:\s*([^\]\)]+)[\]\)]', text)
+
+                    main_text = text
+                    metadata = []
+
+                    if conf_match:
+                        main_text = main_text.replace(conf_match.group(0), '').strip()
+                        metadata.append(f"신뢰도 {conf_match.group(1)}%")
+                    if source_match:
+                        main_text = main_text.replace(source_match.group(0), '').strip()
+                        metadata.append(f"출처: {source_match.group(1)}")
+
+                    return main_text.strip(' -'), metadata
+
+                def display_item_with_metadata(text, item_type='info'):
+                    """메타데이터를 오른쪽에 표시하며 아이템 출력"""
+                    main_text, metadata = parse_metadata(text)
+
+                    if metadata:
+                        left, right = st.columns([4, 1])
+                        with left:
+                            if item_type == 'success':
+                                st.success(main_text)
+                            elif item_type == 'error':
+                                st.error(main_text)
+                            elif item_type == 'warning':
+                                st.warning(main_text)
+                            else:
+                                st.info(main_text)
+                        with right:
+                            for m in metadata:
+                                st.caption(f"📎 {m}")
+                    else:
+                        if item_type == 'success':
+                            st.success(main_text)
+                        elif item_type == 'error':
+                            st.error(main_text)
+                        elif item_type == 'warning':
+                            st.warning(main_text)
+                        else:
+                            st.info(main_text)
+
                 with col1:
                     st.markdown("#### ✅ 강점 (논리 지지 요소)")
                     for s in evaluation.strengths[:5]:
-                        st.success(s)
+                        display_item_with_metadata(s, 'success')
 
                 with col2:
                     st.markdown("#### ❌ 약점 (위험 요소)")
                     for w in evaluation.weaknesses[:5]:
-                        st.error(w)
+                        display_item_with_metadata(w, 'error')
 
                 # 확률적 분석
                 st.markdown("### 🎲 확률적 전망")
@@ -686,12 +733,12 @@ def render_thesis_evaluation(portfolio: Portfolio):
 
                 if risk.get('risks'):
                     for r in risk['risks']:
-                        st.warning(r)
+                        display_item_with_metadata(r, 'warning')
 
                 # 권고사항
                 st.markdown("### 💡 권고사항")
                 for rec in evaluation.recommendations:
-                    st.info(rec)
+                    display_item_with_metadata(rec, 'info')
 
             except Exception as e:
                 st.error(f"분석 중 오류 발생: {e}")
