@@ -865,94 +865,81 @@ class ThesisEvaluator:
                 matched_theme_key = theme_key
                 break
 
-        # 신뢰도 표시 함수
-        def confidence_badge(conf: int) -> str:
+        # 신뢰도 간략 표시 (신뢰도만, 출처는 숨김)
+        def conf_icon(conf: int) -> str:
             if conf >= 90:
-                return f"[신뢰도 {conf}% 🟢]"
+                return "🟢"
             elif conf >= 70:
-                return f"[신뢰도 {conf}% 🟡]"
+                return "🟡"
             elif conf >= 50:
-                return f"[신뢰도 {conf}% 🟠]"
+                return "🟠"
             else:
-                return f"[신뢰도 {conf}% 🔴 추정치]"
+                return "🔴"
 
         # 로봇/신사업 관련
         if any(kw in thesis_lower for kw in ['로봇', 'robot', '신사업', '미래', '새로운', '대세']):
             # 기업별 맞춤 분석
             if matched_theme and matched_theme_key in ['로봇', 'robot']:
-                analysis = f"🤖 **{name} 로봇 사업 심층 분석**\n\n"
-                analysis += f"말씀하신 대로 '{thesis_desc}' - 이 관점을 이해합니다.\n\n"
+                analysis = f"🤖 **{name} 로봇 사업 분석**\n\n"
 
-                # 자회사/핵심 정보 (출처 포함)
+                # 자회사/핵심 정보 (간결하게)
                 if 'subsidiary' in matched_theme:
                     conf = matched_theme.get('subsidiary_confidence', 0)
                     src = matched_theme.get('subsidiary_source', '')
-                    analysis += f"**핵심 자회사**: {matched_theme['subsidiary']}\n"
-                    analysis += f"  └ 출처: {src} {confidence_badge(conf)}\n\n"
+                    analysis += f"• **핵심 자회사**: {matched_theme['subsidiary']} (신뢰도 {conf}%) [출처: {src}]\n"
 
                 if 'acquisition' in matched_theme:
                     conf = matched_theme.get('acquisition_confidence', 0)
                     src = matched_theme.get('acquisition_source', '')
-                    analysis += f"**인수 정보**: {matched_theme['acquisition']}\n"
-                    analysis += f"  └ 출처: {src} {confidence_badge(conf)}\n\n"
+                    analysis += f"• **인수 정보**: {matched_theme['acquisition']} (신뢰도 {conf}%) [출처: {src}]\n"
 
                 if 'products' in matched_theme:
                     conf = matched_theme.get('products_confidence', 0)
                     src = matched_theme.get('products_source', '')
-                    analysis += f"**주요 제품**: {', '.join(matched_theme['products'])}\n"
-                    analysis += f"  └ 출처: {src} {confidence_badge(conf)}\n\n"
+                    analysis += f"• **주요 제품**: {', '.join(matched_theme['products'])} (신뢰도 {conf}%) [출처: {src}]\n"
+
+                analysis += "\n"
 
                 # 투자자 관점 이해
                 if 'investor_mindset' in matched_theme:
-                    analysis += f"💭 **투자자님의 관점 이해**: {matched_theme['investor_mindset']}\n\n"
+                    analysis += f"💭 {matched_theme['investor_mindset']}\n\n"
 
                 # 핵심 질문
                 if 'key_question' in matched_theme:
                     analysis += f"❓ **핵심 질문**: {matched_theme['key_question']}\n\n"
 
-                # 현실 체크 (출처/신뢰도 포함)
+                # 현실 체크 (간결하게)
                 if 'revenue_contribution' in matched_theme:
                     conf = matched_theme.get('revenue_confidence', 0)
-                    src = matched_theme.get('revenue_source', '')
-                    analysis += f"⚠️ **현실 체크**: {matched_theme['revenue_contribution']}\n"
-                    analysis += f"  └ 출처: {src} {confidence_badge(conf)}\n"
-                    analysis += f"  └ 즉, 로봇 테마가 현재 실적에 미치는 영향은 제한적입니다.\n"
-                    analysis += f"  └ 이는 '미래 가치'에 대한 베팅임을 인지하셔야 합니다.\n\n"
+                    analysis += f"⚠️ **현실**: {matched_theme['revenue_contribution']} {conf_icon(conf)} → 미래 가치 베팅\n\n"
 
                 # 경쟁 구도
                 if 'competitors' in matched_theme:
-                    conf = matched_theme.get('competitors_confidence', 0)
-                    src = matched_theme.get('competitors_source', '')
-                    analysis += f"**경쟁사**: {', '.join(matched_theme['competitors'])}\n"
-                    analysis += f"  └ 출처: {src} {confidence_badge(conf)}\n"
-                    analysis += f"  └ 보스턴 다이나믹스의 기술력은 뛰어나지만, 상용화와 수익화는 별개입니다.\n\n"
+                    analysis += f"🏁 **경쟁**: {', '.join(matched_theme['competitors'])}\n\n"
 
-                # 리스크 (개별 신뢰도 포함)
+                # 리스크 (간결하게)
                 risks = matched_theme.get('risks', [])
                 if risks:
-                    analysis += f"**핵심 리스크**:\n"
+                    risk_items = []
                     for r in risks:
                         if isinstance(r, dict):
                             conf = r.get('confidence', 0)
-                            src = r.get('source', '')
-                            analysis += f"  • {r['risk']} {confidence_badge(conf)}\n"
-                            analysis += f"    └ 근거: {src}\n"
+                            risk_items.append(f"{r['risk']} {conf_icon(conf)}")
                         else:
-                            analysis += f"  • {r}\n"
-                    analysis += "\n"
+                            risk_items.append(r)
+                    analysis += f"⚠️ **리스크**: {' | '.join(risk_items)}\n\n"
 
-                # 촉매 (개별 신뢰도 포함)
+                # 촉매 (간결하게)
                 catalysts = matched_theme.get('catalysts', [])
                 if catalysts:
-                    analysis += f"**주시할 촉매**:\n"
+                    cat_items = []
                     for c in catalysts:
                         if isinstance(c, dict):
                             conf = c.get('confidence', 0)
-                            src = c.get('source', '')
-                            analysis += f"  • {c['catalyst']} {confidence_badge(conf)}\n"
-                            analysis += f"    └ 근거: {src}\n"
+                            cat_items.append(f"{c['catalyst']} {conf_icon(conf)}")
                         else:
-                            analysis += f"  • {c}\n"
+                            cat_items.append(c)
+                    analysis += f"🎯 **촉매**: {' | '.join(cat_items)}"
 
                 recommendations.append(analysis)
             else:
