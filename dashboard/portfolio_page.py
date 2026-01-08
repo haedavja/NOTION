@@ -359,6 +359,7 @@ def render_portfolio_input():
 
             with col3:
                 thesis_type = st.selectbox("투자 논리", [t.value for t in InvestmentThesis])
+                thesis_custom = st.text_input("투자 논리 (직접 입력)", placeholder="예: AI 성장주, 배당 투자, 실적 턴어라운드 등")
                 time_horizon = st.selectbox("투자 기간", ["단기", "중기", "장기"])
 
             # 목표가/손절가 미리보기
@@ -380,7 +381,7 @@ def render_portfolio_input():
                     current_price=price,
                     asset_type=AssetType.STOCK,
                     thesis_type=thesis_enum,
-                    thesis_description="",
+                    thesis_description=thesis_custom if thesis_custom else "",
                     target_price=target_p if target_pct > 0 else None,
                     stop_loss=stop_p if stop_loss_pct > 0 else None,
                     time_horizon=time_horizon,
