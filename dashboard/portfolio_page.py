@@ -621,23 +621,24 @@ def render_thesis_evaluation(portfolio: Portfolio):
                     source_match = re.search(r'[\[\(]출처:\s*([^\]\)]+)[\]\)]', text)
 
                     main_text = text
-                    metadata = []
+                    confidence = None
+                    source = None
 
                     if conf_match:
                         main_text = main_text.replace(conf_match.group(0), '').strip()
-                        metadata.append(f"신뢰도 {conf_match.group(1)}%")
+                        confidence = int(conf_match.group(1))
                     if source_match:
                         main_text = main_text.replace(source_match.group(0), '').strip()
-                        metadata.append(f"출처: {source_match.group(1)}")
+                        source = source_match.group(1).strip()
 
-                    return main_text.strip(' -'), metadata
+                    return main_text.strip(' -'), confidence, source
 
-                def display_item_with_metadata(text, item_type='info'):
-                    """메타데이터를 오른쪽에 표시하며 아이템 출력"""
-                    main_text, metadata = parse_metadata(text)
+                def display_item_with_metadata(text, item_type='info', idx=0):
+                    """메타데이터를 오른쪽에 간략히 표시 (클릭 시 출처 표시)"""
+                    main_text, confidence, source = parse_metadata(text)
 
-                    if metadata:
-                        left, right = st.columns([4, 1])
+                    if confidence is not None:
+                        left, right = st.columns([5, 1])
                         with left:
                             if item_type == 'success':
                                 st.success(main_text)
@@ -648,8 +649,21 @@ def render_thesis_evaluation(portfolio: Portfolio):
                             else:
                                 st.info(main_text)
                         with right:
-                            for m in metadata:
-                                st.caption(f"📎 {m}")
+                            # 신뢰도 색상
+                            if confidence >= 80:
+                                conf_color = "🟢"
+                            elif confidence >= 60:
+                                conf_color = "🟡"
+                            else:
+                                conf_color = "🔴"
+
+                            # popover로 출처 표시 (클릭 시 펼침)
+                            with st.popover(f"{conf_color} {confidence}%"):
+                                st.caption(f"**신뢰도**: {confidence}%")
+                                if source:
+                                    st.caption(f"**출처**: {source}")
+                                else:
+                                    st.caption("*출처 정보 없음*")
                     else:
                         if item_type == 'success':
                             st.success(main_text)
