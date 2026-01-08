@@ -115,6 +115,165 @@ class ThesisEvaluator:
         'macro_risk': ['금리', '인플레', '경기침체', 'interest', 'inflation', 'recession'],
     }
 
+    # 기업별 핵심 투자 테마 정보
+    COMPANY_KNOWLEDGE = {
+        # 현대차 그룹
+        '005380.KS': {  # 현대차
+            'name': '현대자동차',
+            'themes': {
+                '로봇': {
+                    'subsidiary': '보스턴 다이나믹스 (Boston Dynamics)',
+                    'acquisition': '2021년 약 1조원에 인수 (지분 80%)',
+                    'products': ['Spot (4족 보행 로봇)', 'Atlas (휴머노이드)', 'Stretch (물류 로봇)'],
+                    'revenue_contribution': '현재 전체 매출의 1% 미만으로 추정',
+                    'competitors': ['테슬라 옵티머스', '샤오미 CyberDog', '유니트리'],
+                    'risks': ['로봇 상용화 지연', '막대한 R&D 비용', '수익화 시점 불확실'],
+                    'catalysts': ['공장 자동화 수주', '물류 로봇 상용화', '휴머노이드 양산'],
+                    'investor_mindset': '전기차를 넘어 로봇/모빌리티 기업으로의 전환에 베팅',
+                },
+                '전기차': {
+                    'models': ['아이오닉5', '아이오닉6', 'EV9', '캐스퍼 일렉트릭'],
+                    'platform': 'E-GMP 전용 플랫폼',
+                    'market_share': '글로벌 전기차 판매 4위권',
+                    'risks': ['테슬라/중국 업체와의 가격 경쟁', '배터리 원가'],
+                    'investor_mindset': '전기차 전환 수혜, 현대차의 기술력 신뢰',
+                },
+            },
+        },
+        '000270.KS': {  # 기아
+            'name': '기아',
+            'themes': {
+                '전기차': {
+                    'models': ['EV6', 'EV9', 'EV3', 'EV5'],
+                    'strength': 'EV6 - 유럽 올해의 차 수상',
+                    'risks': ['전기차 성장 둔화', '중국 업체 경쟁'],
+                    'investor_mindset': '현대차그룹 전기차 수혜주',
+                },
+                'PBV': {
+                    'concept': 'Purpose Built Vehicle (목적 기반 차량)',
+                    'examples': ['로보택시', '배송 차량', '이동식 사무실'],
+                    'investor_mindset': '미래 모빌리티 신사업 기대',
+                },
+            },
+        },
+        # 삼성전자
+        '005930.KS': {
+            'name': '삼성전자',
+            'themes': {
+                'AI': {
+                    'products': ['HBM3E 메모리', '갤럭시 AI', '엑시노스'],
+                    'hbm_status': 'HBM3E 엔비디아 퀄 진행 중 (2024년 기준)',
+                    'risks': ['SK하이닉스 대비 HBM 기술 격차', '파운드리 수율'],
+                    'investor_mindset': 'AI 반도체 수요 급증 수혜 기대',
+                },
+                '반도체': {
+                    'segments': ['메모리 (DRAM/NAND)', '파운드리', '시스템LSI'],
+                    'market_position': '메모리 1위, 파운드리 2위',
+                    'risks': ['중국 업체 추격', '사이클 변동성'],
+                    'investor_mindset': '반도체 슈퍼사이클 수혜',
+                },
+            },
+        },
+        # SK하이닉스
+        '000660.KS': {
+            'name': 'SK하이닉스',
+            'themes': {
+                'AI': {
+                    'products': ['HBM3E', 'HBM4 개발 중'],
+                    'customer': '엔비디아 HBM 독점 공급 (2024년 기준)',
+                    'market_share': 'HBM 시장 점유율 50% 이상',
+                    'risks': ['삼성 추격', '공급 과잉 가능성'],
+                    'investor_mindset': 'AI 반도체 최대 수혜주, 엔비디아 파트너',
+                },
+            },
+        },
+        # 네이버
+        '035420.KS': {
+            'name': '네이버',
+            'themes': {
+                'AI': {
+                    'products': ['하이퍼클로바X', '서치GPT', 'CLOVA'],
+                    'strategy': '검색/커머스에 AI 통합',
+                    'risks': ['글로벌 빅테크 경쟁', 'AI 투자 비용'],
+                    'investor_mindset': '한국 대표 AI 플랫폼 기업',
+                },
+            },
+        },
+        # 미국 주식
+        'NVDA': {
+            'name': '엔비디아',
+            'themes': {
+                'AI': {
+                    'products': ['H100', 'H200', 'Blackwell B100/B200'],
+                    'market_position': 'AI GPU 시장 점유율 80% 이상',
+                    'customers': ['MS', 'Meta', 'Google', 'Amazon', '오픈AI'],
+                    'risks': ['AMD/인텔 경쟁', '중국 수출 규제', '고객사 자체 칩 개발'],
+                    'investor_mindset': 'AI 인프라 필수 기업, AI 골드러시의 곡괭이',
+                },
+            },
+        },
+        'TSLA': {
+            'name': '테슬라',
+            'themes': {
+                '로봇': {
+                    'product': '옵티머스 (Optimus) 휴머노이드 로봇',
+                    'timeline': '2025년 한정 판매, 2026년 대량 생산 목표',
+                    'use_case': '공장 자동화, 가정용 로봇',
+                    'risks': ['기술 완성도', '상용화 지연', '보스턴 다이나믹스 등 경쟁'],
+                    'investor_mindset': '테슬라를 자동차가 아닌 AI/로봇 기업으로 평가',
+                },
+                '전기차': {
+                    'models': ['Model 3', 'Model Y', 'Cybertruck', 'Model 2 (저가형)'],
+                    'risks': ['중국 업체 경쟁', '가격 인하 압박'],
+                    'investor_mindset': '전기차 리더, 자율주행 기술력',
+                },
+                'FSD': {
+                    'product': 'Full Self-Driving (완전자율주행)',
+                    'status': 'FSD v12 - 순수 AI 기반',
+                    'risks': ['규제', '사고 책임', '기술 완성도'],
+                    'investor_mindset': '로보택시 사업 기대',
+                },
+            },
+        },
+        'AAPL': {
+            'name': '애플',
+            'themes': {
+                'AI': {
+                    'products': ['Apple Intelligence', 'Siri 강화', '온디바이스 AI'],
+                    'strategy': '프라이버시 중심 온디바이스 AI',
+                    'risks': ['AI 후발주자', '오픈AI 의존'],
+                    'investor_mindset': 'AI 기능으로 아이폰 교체 사이클 기대',
+                },
+                'VR': {
+                    'product': 'Vision Pro',
+                    'risks': ['높은 가격', '킬러 앱 부재'],
+                    'investor_mindset': '새로운 컴퓨팅 플랫폼 기대',
+                },
+            },
+        },
+        'MSFT': {
+            'name': '마이크로소프트',
+            'themes': {
+                'AI': {
+                    'products': ['Copilot', 'Azure OpenAI', 'GitHub Copilot'],
+                    'partnership': '오픈AI 최대 투자자 (130억 달러+)',
+                    'strategy': '전 제품에 AI 통합',
+                    'investor_mindset': 'AI 시대 최대 수혜 기업, 오픈AI 파트너',
+                },
+            },
+        },
+        'GOOGL': {
+            'name': '구글 (알파벳)',
+            'themes': {
+                'AI': {
+                    'products': ['Gemini', 'Bard', 'TPU'],
+                    'risks': ['검색 시장 잠식 우려', 'AI 경쟁 후발'],
+                    'investor_mindset': 'AI 원천 기술력, 데이터 우위',
+                },
+            },
+        },
+    }
+
     def __init__(self):
         """초기화"""
         self.cache = {}
@@ -521,44 +680,128 @@ class ThesisEvaluator:
 
         recommendations.append(intro)
 
-        # === 2. 핵심 논리 검증 (자연스러운 문장) ===
+        # === 2. 기업별 맞춤 분석 (지식 베이스 활용) ===
+        company_info = self.COMPANY_KNOWLEDGE.get(position.symbol, {})
+        company_themes = company_info.get('themes', {})
+
+        # 테마 매칭 (사용자 입력과 기업 지식 매칭)
+        matched_theme = None
+        matched_theme_key = None
+        for theme_key, theme_info in company_themes.items():
+            if theme_key.lower() in thesis_lower or any(kw in thesis_lower for kw in [theme_key, theme_key.lower()]):
+                matched_theme = theme_info
+                matched_theme_key = theme_key
+                break
 
         # 로봇/신사업 관련
-        if any(kw in thesis_lower for kw in ['로봇', 'robot', '신사업', '미래', '새로운']):
-            analysis = f"🤖 **신사업(로봇) 논리 분석**\n\n"
-            analysis += f"말씀하신 '{thesis_desc}' 논리에 대해 검토해보겠습니다.\n\n"
+        if any(kw in thesis_lower for kw in ['로봇', 'robot', '신사업', '미래', '새로운', '대세']):
+            # 기업별 맞춤 분석
+            if matched_theme and matched_theme_key in ['로봇', 'robot']:
+                analysis = f"🤖 **{name} 로봇 사업 심층 분석**\n\n"
+                analysis += f"말씀하신 대로 '{thesis_desc}' - 이 관점을 이해합니다.\n\n"
 
-            if revenue_growth < 15:
-                analysis += f"현재 {name}의 전체 매출 성장률은 {revenue_growth:.1f}%입니다. "
-                analysis += f"로봇/신사업이 아직 전체 매출에서 차지하는 비중이 미미할 가능성이 높습니다. "
-                analysis += f"신사업 테마로 투자하실 경우, 해당 사업부의 매출 비중과 성장률을 별도로 확인하셔야 합니다.\n\n"
+                # 자회사/핵심 정보
+                if 'subsidiary' in matched_theme:
+                    analysis += f"**핵심 자회사**: {matched_theme['subsidiary']}\n"
+                if 'acquisition' in matched_theme:
+                    analysis += f"**인수 정보**: {matched_theme['acquisition']}\n"
+                if 'products' in matched_theme:
+                    analysis += f"**주요 제품**: {', '.join(matched_theme['products'])}\n\n"
 
-            if earnings_growth < 0:
-                analysis += f"⚠️ 특히 전체 이익이 {earnings_growth:.1f}% 역성장 중인 점이 우려됩니다. "
-                analysis += f"신사업 투자로 인한 비용 증가가 수익성을 압박하고 있을 수 있습니다.\n\n"
+                # 투자자 관점 이해
+                if 'investor_mindset' in matched_theme:
+                    analysis += f"💭 **투자자님의 관점**: {matched_theme['investor_mindset']}\n\n"
 
-            if debt_equity and debt_equity > 100:
-                analysis += f"부채비율이 {debt_equity:.0f}%로 높은 편입니다. "
-                analysis += f"신사업 확장에 필요한 투자 여력이 제한될 수 있습니다.\n\n"
+                # 현실 체크
+                if 'revenue_contribution' in matched_theme:
+                    analysis += f"⚠️ **현실 체크**: {matched_theme['revenue_contribution']}. "
+                    analysis += f"즉, 로봇 테마가 현재 실적에 미치는 영향은 제한적입니다. "
+                    analysis += f"이는 '미래 가치'에 대한 베팅임을 인지하셔야 합니다.\n\n"
 
-            analysis += f"**체크포인트**: 로봇 사업부 매출 비중, 경쟁사 대비 기술력, 수주 현황을 분기별로 확인하시기 바랍니다."
-            recommendations.append(analysis)
+                # 경쟁 구도
+                if 'competitors' in matched_theme:
+                    analysis += f"**경쟁사**: {', '.join(matched_theme['competitors'])}\n"
+                    analysis += f"로봇 산업은 테슬라, 중국 업체 등 강력한 경쟁자들이 있습니다. "
+                    analysis += f"보스턴 다이나믹스의 기술력은 뛰어나지만, 상용화와 수익화는 별개의 문제입니다.\n\n"
+
+                # 리스크
+                if 'risks' in matched_theme:
+                    analysis += f"**핵심 리스크**:\n"
+                    for risk in matched_theme['risks']:
+                        analysis += f"  • {risk}\n"
+                    analysis += "\n"
+
+                # 촉매
+                if 'catalysts' in matched_theme:
+                    analysis += f"**주시할 촉매**:\n"
+                    for cat in matched_theme['catalysts']:
+                        analysis += f"  • {cat}\n"
+
+                recommendations.append(analysis)
+            else:
+                # 일반적인 로봇/신사업 분석 (지식 없는 경우)
+                analysis = f"🤖 **신사업(로봇) 논리 분석**\n\n"
+                analysis += f"말씀하신 '{thesis_desc}' 논리에 대해 검토해보겠습니다.\n\n"
+
+                if revenue_growth < 15:
+                    analysis += f"현재 {name}의 전체 매출 성장률은 {revenue_growth:.1f}%입니다. "
+                    analysis += f"로봇/신사업이 아직 전체 매출에서 차지하는 비중이 미미할 가능성이 높습니다. "
+                    analysis += f"신사업 테마로 투자하실 경우, 해당 사업부의 매출 비중과 성장률을 별도로 확인하셔야 합니다.\n\n"
+
+                if earnings_growth < 0:
+                    analysis += f"⚠️ 특히 전체 이익이 {earnings_growth:.1f}% 역성장 중인 점이 우려됩니다. "
+                    analysis += f"신사업 투자로 인한 비용 증가가 수익성을 압박하고 있을 수 있습니다.\n\n"
+
+                analysis += f"**체크포인트**: 해당 신사업부 매출 비중, 경쟁사 대비 기술력, 수주 현황을 분기별로 확인하시기 바랍니다."
+                recommendations.append(analysis)
 
         # AI 관련
-        elif any(kw in thesis_lower for kw in ['ai', '인공지능', 'artificial']):
-            analysis = f"🧠 **AI 성장 논리 분석**\n\n"
+        elif any(kw in thesis_lower for kw in ['ai', '인공지능', 'artificial', '반도체', 'hbm']):
+            # 기업별 AI 지식이 있는 경우
+            ai_theme = company_themes.get('AI', {})
+            if ai_theme:
+                analysis = f"🧠 **{name} AI 사업 심층 분석**\n\n"
+                analysis += f"말씀하신 '{thesis_desc}' 관점을 이해합니다.\n\n"
 
-            if revenue_growth > 30:
-                analysis += f"매출이 {revenue_growth:.1f}% 성장 중으로, AI 수혜가 실적에 반영되고 있는 것으로 보입니다. "
+                if 'products' in ai_theme:
+                    analysis += f"**AI 관련 제품/서비스**: {', '.join(ai_theme['products'])}\n"
+                if 'market_position' in ai_theme:
+                    analysis += f"**시장 지위**: {ai_theme['market_position']}\n"
+                if 'customer' in ai_theme:
+                    analysis += f"**핵심 고객**: {ai_theme['customer']}\n"
+                if 'partnership' in ai_theme:
+                    analysis += f"**파트너십**: {ai_theme['partnership']}\n"
+
+                if 'investor_mindset' in ai_theme:
+                    analysis += f"\n💭 **투자자님의 관점**: {ai_theme['investor_mindset']}\n\n"
+
+                # 현실 체크
+                if revenue_growth > 30:
+                    analysis += f"✅ 매출이 {revenue_growth:.1f}% 성장 중으로, AI 수혜가 실적에 반영되고 있습니다.\n\n"
+                else:
+                    analysis += f"⚠️ 전체 매출 성장률은 {revenue_growth:.1f}%입니다. AI 사업이 전체에서 차지하는 비중을 확인해보세요.\n\n"
+
+                if 'risks' in ai_theme:
+                    analysis += f"**핵심 리스크**:\n"
+                    for risk in ai_theme['risks']:
+                        analysis += f"  • {risk}\n"
+
+                recommendations.append(analysis)
             else:
-                analysis += f"현재 매출 성장률은 {revenue_growth:.1f}%입니다. "
-                analysis += f"AI 테마에 대한 시장의 기대가 선반영되어 있을 가능성이 있습니다. "
-                analysis += f"실제 AI 관련 매출이 전체에서 차지하는 비중을 확인해보셔야 합니다.\n\n"
+                # 일반 AI 분석
+                analysis = f"🧠 **AI 성장 논리 분석**\n\n"
 
-            if pe and pe > 30:
-                analysis += f"PER {pe:.1f}x로 고평가 구간입니다. AI 성장이 기대에 미치지 못할 경우 밸류에이션 조정 위험이 있습니다."
+                if revenue_growth > 30:
+                    analysis += f"매출이 {revenue_growth:.1f}% 성장 중으로, AI 수혜가 실적에 반영되고 있는 것으로 보입니다. "
+                else:
+                    analysis += f"현재 매출 성장률은 {revenue_growth:.1f}%입니다. "
+                    analysis += f"AI 테마에 대한 시장의 기대가 선반영되어 있을 가능성이 있습니다. "
+                    analysis += f"실제 AI 관련 매출이 전체에서 차지하는 비중을 확인해보셔야 합니다.\n\n"
 
-            recommendations.append(analysis)
+                if pe and pe > 30:
+                    analysis += f"PER {pe:.1f}x로 고평가 구간입니다. AI 성장이 기대에 미치지 못할 경우 밸류에이션 조정 위험이 있습니다."
+
+                recommendations.append(analysis)
 
         # 성장주 일반
         elif thesis_type == InvestmentThesis.GROWTH or any(kw in thesis_lower for kw in ['성장', 'growth', '확장']):
