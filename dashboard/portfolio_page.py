@@ -634,42 +634,38 @@ def render_thesis_evaluation(portfolio: Portfolio):
                     return main_text.strip(' -'), confidence, source
 
                 def display_item_with_metadata(text, item_type='info', idx=0):
-                    """메타데이터를 오른쪽에 간략히 표시 (클릭 시 출처 표시)"""
+                    """메타데이터를 오른쪽에 간략히 표시 (마우스 오버 시 출처)"""
                     main_text, confidence, source = parse_metadata(text)
 
                     if confidence is not None:
-                        left, right = st.columns([5, 1])
-                        with left:
-                            if item_type == 'success':
-                                st.success(main_text)
-                            elif item_type == 'error':
-                                st.error(main_text)
-                            elif item_type == 'warning':
-                                st.warning(main_text)
-                            else:
-                                st.info(main_text)
-                        with right:
-                            # 신뢰도 색상
-                            if confidence >= 80:
-                                conf_color = "🟢"
-                            elif confidence >= 60:
-                                conf_color = "🟡"
-                            else:
-                                conf_color = "🔴"
+                        # 신뢰도 색상
+                        if confidence >= 80:
+                            conf_color, bg_color = "🟢", "#d4edda"
+                        elif confidence >= 60:
+                            conf_color, bg_color = "🟡", "#fff3cd"
+                        else:
+                            conf_color, bg_color = "🔴", "#f8d7da"
 
-                            # popover 사용 (Streamlit 1.31+), 없으면 expander
-                            if hasattr(st, 'popover'):
-                                with st.popover(f"{conf_color} {confidence}%"):
-                                    st.markdown(f"**신뢰도**: {confidence}%")
-                                    if source:
-                                        st.markdown(f"**출처**: {source}")
-                                    else:
-                                        st.caption("*출처 정보 없음*")
-                            else:
-                                with st.expander(f"{conf_color} {confidence}%"):
-                                    st.markdown(f"**신뢰도**: {confidence}%")
-                                    if source:
-                                        st.markdown(f"**출처**: {source}")
+                        # 툴팁 텍스트
+                        tooltip = f"신뢰도: {confidence}%"
+                        if source:
+                            tooltip += f" | 출처: {source}"
+
+                        # 본문 + 신뢰도 배지 (마우스 오버 시 출처 표시)
+                        badge_html = f'<span title="{tooltip}" style="background:{bg_color};padding:2px 6px;border-radius:4px;font-size:0.8em;cursor:help;margin-left:8px;">{conf_color} {confidence}%</span>'
+
+                        if item_type == 'success':
+                            st.success(main_text)
+                            st.markdown(f"<div style='text-align:right;margin-top:-15px;'>{badge_html}</div>", unsafe_allow_html=True)
+                        elif item_type == 'error':
+                            st.error(main_text)
+                            st.markdown(f"<div style='text-align:right;margin-top:-15px;'>{badge_html}</div>", unsafe_allow_html=True)
+                        elif item_type == 'warning':
+                            st.warning(main_text)
+                            st.markdown(f"<div style='text-align:right;margin-top:-15px;'>{badge_html}</div>", unsafe_allow_html=True)
+                        else:
+                            st.info(main_text)
+                            st.markdown(f"<div style='text-align:right;margin-top:-15px;'>{badge_html}</div>", unsafe_allow_html=True)
                     else:
                         if item_type == 'success':
                             st.success(main_text)
