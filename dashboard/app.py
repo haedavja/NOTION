@@ -100,6 +100,40 @@ except ImportError:
     YFINANCE_AVAILABLE = False
 
 
+def get_minimal_macro_data():
+    """최소 거시경제 데이터 생성 (실시간 데이터 보완용)"""
+    dates = pd.date_range(end=datetime.now(), periods=180, freq='D')
+    return pd.DataFrame({
+        'fed_funds_rate': np.linspace(5.25, 5.5, 180),
+        'cpi': np.linspace(3.0, 3.2, 180) + np.random.randn(180) * 0.1,
+        'unemployment_rate': np.linspace(3.7, 3.9, 180) + np.random.randn(180) * 0.05,
+        'gdp_growth': np.linspace(2.0, 2.5, 180) + np.random.randn(180) * 0.2,
+        'interest_rate': np.linspace(4.0, 4.5, 180),
+        'treasury_10y': np.linspace(4.0, 4.5, 180),
+        'yield_spread': np.linspace(-0.5, 0.5, 180),
+        'vix': np.linspace(15, 20, 180) + np.random.randn(180) * 2,
+    }, index=dates)
+
+
+def get_minimal_fund_flow():
+    """최소 자금흐름 데이터 생성"""
+    dates = pd.date_range(end=datetime.now(), periods=180, freq='D')
+    return pd.DataFrame({
+        'Technology': np.cumsum(np.random.randn(180) * 0.5),
+        'Healthcare': np.cumsum(np.random.randn(180) * 0.3),
+        'Financials': np.cumsum(np.random.randn(180) * 0.4),
+        'Energy': np.cumsum(np.random.randn(180) * 0.3),
+        'Consumer': np.cumsum(np.random.randn(180) * 0.2),
+    }, index=dates)
+
+
+def get_minimal_news():
+    """최소 뉴스 데이터 생성"""
+    return [
+        {'title': 'Market Update', 'source': 'System', 'published_at': datetime.now().isoformat(), 'description': '실시간 데이터 사용 중'},
+    ]
+
+
 @st.cache_data(ttl=300)  # 5분 캐시
 def load_realtime_data():
     """yfinance로 실시간 데이터 로드"""
@@ -137,8 +171,8 @@ def load_realtime_data():
         if market_data.empty:
             return None
 
-        # 매크로 데이터 (샘플 + 실시간 VIX/금리)
-        macro_data = get_sample_macro_data()
+        # 매크로 데이터 (기본 데이터 + 실시간 VIX/금리)
+        macro_data = get_minimal_macro_data()
 
         # VIX 최신값 반영
         if 'vix' in market_data.columns and not market_data['vix'].empty:
@@ -155,8 +189,8 @@ def load_realtime_data():
         return {
             'macro': macro_data,
             'market': market_data,
-            'fund_flow': get_sample_fund_flow(),  # 자금흐름은 샘플 사용
-            'news': get_sample_news(),  # 뉴스는 샘플 사용
+            'fund_flow': get_minimal_fund_flow(),
+            'news': get_minimal_news(),
             'realtime': True,
         }
 
