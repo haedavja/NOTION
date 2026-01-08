@@ -307,28 +307,40 @@ def render_portfolio_input():
     # ===== 새 포지션 추가 =====
     st.subheader("➕ 새 포지션 추가")
 
-    # 종목 검색 (form으로 감싸서 Enter로 검색)
-    with st.form("search_stock_form", clear_on_submit=False):
-        col_search, col_btn = st.columns([4, 1])
-        with col_search:
-            stock_query = st.text_input(
-                "종목 검색",
-                placeholder="현대차, 삼성전자, AAPL, TSLA 등",
-                key="stock_query",
-                label_visibility="collapsed"
-            )
-        with col_btn:
-            search_btn = st.form_submit_button("🔍 검색", use_container_width=True)
-
-    # 검색 버튼 클릭 시
-    if search_btn and stock_query:
-        with st.spinner(f"'{stock_query}' 검색 중..."):
-            info = search_stock(stock_query)
+    # 검색 실행 함수
+    def do_search():
+        query = st.session_state.get('stock_query_input', '')
+        if query:
+            info = search_stock(query)
             if info:
                 st.session_state.searched_stock = info
             else:
                 st.session_state.searched_stock = None
-                st.error(f"❌ '{stock_query}' 종목을 찾을 수 없습니다.")
+                st.session_state.search_error = f"❌ '{query}' 종목을 찾을 수 없습니다."
+        else:
+            st.session_state.search_error = None
+
+    # 세션 상태 초기화
+    if 'search_error' not in st.session_state:
+        st.session_state.search_error = None
+
+    # 종목 검색 (콜백 방식 - 탭 유지)
+    col_search, col_btn = st.columns([4, 1])
+    with col_search:
+        st.text_input(
+            "종목 검색",
+            placeholder="현대차, 삼성전자, AAPL, TSLA 등",
+            key="stock_query_input",
+            label_visibility="collapsed",
+            on_change=do_search
+        )
+    with col_btn:
+        if st.button("🔍 검색", key="search_stock_btn", use_container_width=True):
+            do_search()
+
+    # 에러 표시
+    if st.session_state.search_error:
+        st.error(st.session_state.search_error)
 
     # 검색 결과가 있으면 표시
     if st.session_state.searched_stock:
