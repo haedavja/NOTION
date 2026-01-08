@@ -265,16 +265,25 @@ def render_portfolio_input():
     """포트폴리오 입력 UI - 간단한 버전"""
     st.subheader("📝 포트폴리오 입력")
 
+    # 데이터 저장소 초기화
+    from portfolio.data_store import data_store
+
     # 세션 상태 초기화
     if 'portfolio' not in st.session_state:
-        st.session_state.portfolio = Portfolio(name="My Portfolio")
+        # 저장된 포트폴리오 로드 시도
+        loaded = data_store.load_portfolio()
+        if loaded and loaded.positions:
+            st.session_state.portfolio = loaded
+            st.toast("💾 저장된 포트폴리오를 불러왔습니다!")
+        else:
+            st.session_state.portfolio = Portfolio(name="My Portfolio")
     if 'last_price_update' not in st.session_state:
         st.session_state.last_price_update = None
     if 'searched_stock' not in st.session_state:
         st.session_state.searched_stock = None
 
     # 설정 영역
-    col1, col2, col3 = st.columns([1, 1.5, 2])
+    col1, col2, col3, col4 = st.columns([1, 1, 1.5, 1.5])
 
     with col1:
         if st.button("🗑️ 초기화", key="reset_portfolio_btn"):
@@ -283,6 +292,25 @@ def render_portfolio_input():
             st.session_state.searched_stock = None
 
     with col2:
+        # 저장/불러오기 버튼
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("💾 저장", key="save_portfolio_btn"):
+                if data_store.save_portfolio(st.session_state.portfolio):
+                    st.success("저장됨!")
+                else:
+                    st.error("저장 실패")
+        with c2:
+            if st.button("📂 불러오기", key="load_portfolio_btn"):
+                loaded = data_store.load_portfolio()
+                if loaded:
+                    st.session_state.portfolio = loaded
+                    st.success("불러옴!")
+                    st.rerun()
+                else:
+                    st.warning("저장된 데이터 없음")
+
+    with col3:
         # 실시간 가격 업데이트 버튼
         if st.button("🔄 전체 가격 새로고침", key="update_prices_btn"):
             if st.session_state.portfolio.positions:
@@ -292,7 +320,7 @@ def render_portfolio_input():
                     if updated > 0:
                         st.success(f"✅ {updated}개 종목 업데이트!")
 
-    with col3:
+    with col4:
         c1, c2 = st.columns(2)
         with c1:
             currency_display = st.selectbox("통화", ["USD", "KRW", "BOTH"], index=0, key="currency_display")

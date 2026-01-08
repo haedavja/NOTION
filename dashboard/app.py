@@ -60,9 +60,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS 스타일
+# CSS 스타일 (반응형 포함)
 st.markdown("""
 <style>
+    /* 기본 스타일 */
     .main-header {
         font-size: 2.5rem;
         font-weight: bold;
@@ -76,17 +77,103 @@ st.markdown("""
         padding: 1rem;
         margin: 0.5rem;
     }
-    .bullish {
-        color: #00c853;
-        font-weight: bold;
+    .bullish { color: #00c853; font-weight: bold; }
+    .bearish { color: #ff1744; font-weight: bold; }
+    .neutral { color: #ffc107; font-weight: bold; }
+
+    /* 모바일 반응형 (768px 이하) */
+    @media (max-width: 768px) {
+        .main-header {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        /* 사이드바 숨김 기본 */
+        [data-testid="stSidebar"] {
+            min-width: 0px !important;
+            max-width: 0px !important;
+            padding: 0 !important;
+        }
+        [data-testid="stSidebar"][aria-expanded="true"] {
+            min-width: 250px !important;
+            max-width: 250px !important;
+        }
+
+        /* 컬럼 세로 배치 */
+        [data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+
+        /* 메트릭 카드 작게 */
+        [data-testid="stMetric"] {
+            padding: 0.5rem !important;
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: 0.8rem !important;
+        }
+        [data-testid="stMetricValue"] {
+            font-size: 1.2rem !important;
+        }
+
+        /* 차트 높이 조정 */
+        .js-plotly-plot {
+            max-height: 250px !important;
+        }
+
+        /* 버튼 풀 너비 */
+        .stButton > button {
+            width: 100% !important;
+            margin: 0.2rem 0 !important;
+        }
+
+        /* 테이블 스크롤 */
+        [data-testid="stDataFrame"] {
+            overflow-x: auto !important;
+        }
+
+        /* 탭 작게 */
+        .stTabs [data-baseweb="tab"] {
+            font-size: 0.8rem !important;
+            padding: 0.3rem 0.5rem !important;
+        }
+
+        /* 폼 요소 */
+        .stTextInput input, .stSelectbox select {
+            font-size: 16px !important; /* iOS 줌 방지 */
+        }
     }
-    .bearish {
-        color: #ff1744;
-        font-weight: bold;
+
+    /* 태블릿 (769px ~ 1024px) */
+    @media (min-width: 769px) and (max-width: 1024px) {
+        .main-header {
+            font-size: 2rem;
+        }
+
+        [data-testid="stSidebar"] {
+            min-width: 200px !important;
+            max-width: 200px !important;
+        }
     }
-    .neutral {
-        color: #ffc107;
-        font-weight: bold;
+
+    /* 터치 디바이스 개선 */
+    @media (hover: none) and (pointer: coarse) {
+        .stButton > button {
+            min-height: 44px !important;
+            min-width: 44px !important;
+        }
+
+        a, button, [role="button"] {
+            min-height: 44px;
+            min-width: 44px;
+        }
+    }
+
+    /* 다크 모드 지원 */
+    @media (prefers-color-scheme: dark) {
+        .metric-card {
+            background-color: #262730;
+        }
     }
 </style>
 """, unsafe_allow_html=True)

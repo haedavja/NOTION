@@ -16,6 +16,12 @@ from korea.krx_data import KRXDataCollector
 from korea.korean_stocks import KoreanStockAnalyzer
 from korea.bok_indicators import BOKIndicators
 
+try:
+    from korea.market_keywords import get_realtime_keywords, get_fallback_keywords
+    KEYWORDS_AVAILABLE = True
+except ImportError:
+    KEYWORDS_AVAILABLE = False
+
 
 def get_market_keywords():
     """현재 금융 시장 키워드 (한국 시장 중심)"""
@@ -57,53 +63,71 @@ def get_market_keywords():
 
 def render_market_keywords():
     """시장 키워드 UI - 태그 클라우드 스타일"""
-    st.subheader("🔥 시장 키워드")
+    col_title, col_refresh = st.columns([4, 1])
+    with col_title:
+        st.subheader("🔥 실시간 시장 키워드")
+    with col_refresh:
+        if st.button("🔄", key="refresh_keywords"):
+            st.rerun()
 
-    keywords = get_market_keywords()
+    # 실시간 키워드 시도
+    realtime_data = None
+    if KEYWORDS_AVAILABLE:
+        try:
+            realtime_data = get_realtime_keywords()
+        except:
+            pass
 
-    # 모든 키워드를 하나로 통합 (heat 기준 정렬)
-    all_keywords = []
+    if realtime_data and realtime_data.get('all_keywords'):
+        # 실시간 데이터 사용
+        all_keywords = realtime_data['all_keywords']
+        st.caption("📡 실시간 데이터 (네이버 금융)")
+    else:
+        # 폴백 데이터 사용
+        keywords = get_market_keywords()
+        st.caption("📋 기본 데이터")
 
-    # 핫 테마
-    for t in keywords['핫 테마']:
-        all_keywords.append({
-            'text': t['keyword'],
-            'heat': t['heat'],
-            'type': 'theme',
-            'trend': t['trend'],
-            'tooltip': f"관련주: {', '.join(t['related'])}"
-        })
+        all_keywords = []
+        # 핫 테마
+        for t in keywords['핫 테마']:
+            all_keywords.append({
+                'text': t['keyword'],
+                'heat': t['heat'],
+                'type': 'theme',
+                'trend': t['trend'],
+                'tooltip': f"관련주: {', '.join(t['related'])}"
+            })
 
-    # 정책/이슈
-    for p in keywords['정책/이슈']:
-        color_map = {'호재': '#22c55e', '악재': '#ef4444', '중립': '#eab308', '주의': '#f97316'}
-        all_keywords.append({
-            'text': p['keyword'],
-            'heat': p['heat'],
-            'type': 'policy',
-            'color': color_map.get(p['impact'], '#888'),
-            'tooltip': p['desc']
-        })
+        # 정책/이슈
+        for p in keywords['정책/이슈']:
+            color_map = {'호재': '#22c55e', '악재': '#ef4444', '중립': '#eab308', '주의': '#f97316'}
+            all_keywords.append({
+                'text': p['keyword'],
+                'heat': p['heat'],
+                'type': 'policy',
+                'color': color_map.get(p['impact'], '#888'),
+                'tooltip': p['desc']
+            })
 
-    # 섹터
-    for s in keywords['섹터 모멘텀']:
-        mom_heat = {'강세': 80, '중립': 50, '약세': 30}.get(s['momentum'], 50)
-        all_keywords.append({
-            'text': s['sector'],
-            'heat': mom_heat,
-            'type': 'sector',
-            'trend': {'강세': '↑', '중립': '→', '약세': '↓'}.get(s['momentum'], ''),
-            'tooltip': s['reason']
-        })
+        # 섹터
+        for s in keywords['섹터 모멘텀']:
+            mom_heat = {'강세': 80, '중립': 50, '약세': 30}.get(s['momentum'], 50)
+            all_keywords.append({
+                'text': s['sector'],
+                'heat': mom_heat,
+                'type': 'sector',
+                'trend': {'강세': '↑', '중립': '→', '약세': '↓'}.get(s['momentum'], ''),
+                'tooltip': s['reason']
+            })
 
-    # 글로벌
-    for g in keywords['글로벌 이슈']:
-        all_keywords.append({
-            'text': g['keyword'],
-            'heat': 60,
-            'type': 'global',
-            'tooltip': f"{g['status']} - {g['impact']}"
-        })
+        # 글로벌
+        for g in keywords['글로벌 이슈']:
+            all_keywords.append({
+                'text': g['keyword'],
+                'heat': 60,
+                'type': 'global',
+                'tooltip': f"{g['status']} - {g.get('impact', '')}"
+            })
 
     # 태그 클라우드 HTML 생성
     tags_html = '<div style="line-height:2.5;text-align:center;">'
