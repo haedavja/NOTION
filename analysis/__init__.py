@@ -12,6 +12,7 @@ from .technical_indicators import (
     TechnicalIndicators, SignalAnalyzer, IndicatorSignal, analyze_stock
 )
 from .stock_comparator import StockComparator, StockMetrics, ComparisonResult, stock_comparator
+from .social_sentiment import SocialSentimentAnalyzer, SentimentScore, social_analyzer
 
 __all__ = [
     'MacroAnalyzer', 'FlowAnalyzer', 'SentimentAnalyzer', 'TechnicalAnalyzer',
@@ -20,5 +21,6 @@ __all__ = [
     'MACDStrategy', 'BollingerBandStrategy', 'CombinedStrategy',
     'backtester', 'quick_backtest',
     'TechnicalIndicators', 'SignalAnalyzer', 'IndicatorSignal', 'analyze_stock',
-    'StockComparator', 'StockMetrics', 'ComparisonResult', 'stock_comparator'
+    'StockComparator', 'StockMetrics', 'ComparisonResult', 'stock_comparator',
+    'SocialSentimentAnalyzer', 'SentimentScore', 'social_analyzer'
 ]

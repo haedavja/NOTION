@@ -64,6 +64,12 @@ try:
 except ImportError:
     TOOLS_AVAILABLE = False
 
+try:
+    from dashboard.ai_chat_page import render_ai_sentiment_page
+    AI_CHAT_AVAILABLE = True
+except ImportError:
+    AI_CHAT_AVAILABLE = False
+
 
 # 페이지 설정
 st.set_page_config(
@@ -552,10 +558,11 @@ def main():
         "🤖 AI 분석",
         "🇰🇷 한국 주식",
         "🔧 고급 기능",
-        "🛠️ 투자 도구"
+        "🛠️ 투자 도구",
+        "🧠 AI 어시스턴트"
     ]
     tabs = st.tabs(tab_names)
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = tabs
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = tabs
 
     # ========== 탭 1: 종합 예측 ==========
     with tab1:
@@ -867,6 +874,21 @@ def main():
         else:
             st.warning("투자 도구 모듈을 사용할 수 없습니다.")
             st.info("tools_page 모듈을 확인하세요.")
+
+    # ========== 탭 12: AI 어시스턴트 ==========
+    with tab12:
+        if AI_CHAT_AVAILABLE:
+            render_ai_sentiment_page()
+        else:
+            st.warning("AI 어시스턴트 모듈을 사용할 수 없습니다.")
+            st.info("ai_chat_page 모듈을 확인하세요.")
+            st.markdown("""
+            **필요한 패키지:**
+            - openai (GPT API용)
+
+            **필요한 설정:**
+            - OPENAI_API_KEY 환경변수
+            """)
 
     # 푸터
     st.divider()
