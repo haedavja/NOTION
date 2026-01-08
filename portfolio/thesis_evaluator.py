@@ -115,7 +115,7 @@ class ThesisEvaluator:
         'macro_risk': ['금리', '인플레', '경기침체', 'interest', 'inflation', 'recession'],
     }
 
-    # 기업별 핵심 투자 테마 정보
+    # 기업별 핵심 투자 테마 정보 (출처 및 신뢰도 포함)
     COMPANY_KNOWLEDGE = {
         # 현대차 그룹
         '005380.KS': {  # 현대차
@@ -123,13 +123,32 @@ class ThesisEvaluator:
             'themes': {
                 '로봇': {
                     'subsidiary': '보스턴 다이나믹스 (Boston Dynamics)',
-                    'acquisition': '2021년 약 1조원에 인수 (지분 80%)',
+                    'subsidiary_source': '현대차 공시 (2021.06)',
+                    'subsidiary_confidence': 100,
+                    'acquisition': '2021년 약 11억 달러(약 1.1조원)에 인수, 지분 80% 확보',
+                    'acquisition_source': '현대차그룹 공식 발표 및 SEC 공시',
+                    'acquisition_confidence': 100,
                     'products': ['Spot (4족 보행 로봇)', 'Atlas (휴머노이드)', 'Stretch (물류 로봇)'],
-                    'revenue_contribution': '현재 전체 매출의 1% 미만으로 추정',
-                    'competitors': ['테슬라 옵티머스', '샤오미 CyberDog', '유니트리'],
-                    'risks': ['로봇 상용화 지연', '막대한 R&D 비용', '수익화 시점 불확실'],
-                    'catalysts': ['공장 자동화 수주', '물류 로봇 상용화', '휴머노이드 양산'],
+                    'products_source': '보스턴 다이나믹스 공식 홈페이지',
+                    'products_confidence': 100,
+                    'revenue_contribution': '전체 매출의 1% 미만 추정 (별도 공시 없음)',
+                    'revenue_source': '애널리스트 추정치 종합, 사업보고서 미공개',
+                    'revenue_confidence': 40,  # 추정치라서 낮음
+                    'competitors': ['테슬라 옵티머스', '샤오미 CyberDog', '유니트리', 'Figure AI'],
+                    'competitors_source': '산업 리서치 및 뉴스 종합',
+                    'competitors_confidence': 85,
+                    'risks': [
+                        {'risk': '로봇 상용화 지연', 'confidence': 80, 'source': '산업 전문가 의견'},
+                        {'risk': '연간 R&D 비용 약 3000억원 이상 추정', 'confidence': 50, 'source': '애널리스트 추정'},
+                        {'risk': '수익화 시점 2027년 이후 전망', 'confidence': 60, 'source': '증권사 리포트 종합'},
+                    ],
+                    'catalysts': [
+                        {'catalyst': '현대차 공장 Spot 로봇 도입 확대', 'confidence': 90, 'source': '현대차 뉴스룸'},
+                        {'catalyst': '물류 로봇 Stretch 상용화', 'confidence': 70, 'source': '보스턴 다이나믹스 발표'},
+                        {'catalyst': '휴머노이드 Atlas 양산', 'confidence': 40, 'source': '기술 개발 단계, 양산 일정 미정'},
+                    ],
                     'investor_mindset': '전기차를 넘어 로봇/모빌리티 기업으로의 전환에 베팅',
+                    'key_question': '보스턴 다이나믹스가 언제 흑자전환하고 현대차 실적에 의미있게 기여할 것인가?',
                 },
                 '전기차': {
                     'models': ['아이오닉5', '아이오닉6', 'EV9', '캐스퍼 일렉트릭'],
@@ -693,6 +712,17 @@ class ThesisEvaluator:
                 matched_theme_key = theme_key
                 break
 
+        # 신뢰도 표시 함수
+        def confidence_badge(conf: int) -> str:
+            if conf >= 90:
+                return f"[신뢰도 {conf}% 🟢]"
+            elif conf >= 70:
+                return f"[신뢰도 {conf}% 🟡]"
+            elif conf >= 50:
+                return f"[신뢰도 {conf}% 🟠]"
+            else:
+                return f"[신뢰도 {conf}% 🔴 추정치]"
+
         # 로봇/신사업 관련
         if any(kw in thesis_lower for kw in ['로봇', 'robot', '신사업', '미래', '새로운', '대세']):
             # 기업별 맞춤 분석
@@ -700,42 +730,76 @@ class ThesisEvaluator:
                 analysis = f"🤖 **{name} 로봇 사업 심층 분석**\n\n"
                 analysis += f"말씀하신 대로 '{thesis_desc}' - 이 관점을 이해합니다.\n\n"
 
-                # 자회사/핵심 정보
+                # 자회사/핵심 정보 (출처 포함)
                 if 'subsidiary' in matched_theme:
+                    conf = matched_theme.get('subsidiary_confidence', 0)
+                    src = matched_theme.get('subsidiary_source', '')
                     analysis += f"**핵심 자회사**: {matched_theme['subsidiary']}\n"
+                    analysis += f"  └ 출처: {src} {confidence_badge(conf)}\n\n"
+
                 if 'acquisition' in matched_theme:
+                    conf = matched_theme.get('acquisition_confidence', 0)
+                    src = matched_theme.get('acquisition_source', '')
                     analysis += f"**인수 정보**: {matched_theme['acquisition']}\n"
+                    analysis += f"  └ 출처: {src} {confidence_badge(conf)}\n\n"
+
                 if 'products' in matched_theme:
-                    analysis += f"**주요 제품**: {', '.join(matched_theme['products'])}\n\n"
+                    conf = matched_theme.get('products_confidence', 0)
+                    src = matched_theme.get('products_source', '')
+                    analysis += f"**주요 제품**: {', '.join(matched_theme['products'])}\n"
+                    analysis += f"  └ 출처: {src} {confidence_badge(conf)}\n\n"
 
                 # 투자자 관점 이해
                 if 'investor_mindset' in matched_theme:
-                    analysis += f"💭 **투자자님의 관점**: {matched_theme['investor_mindset']}\n\n"
+                    analysis += f"💭 **투자자님의 관점 이해**: {matched_theme['investor_mindset']}\n\n"
 
-                # 현실 체크
+                # 핵심 질문
+                if 'key_question' in matched_theme:
+                    analysis += f"❓ **핵심 질문**: {matched_theme['key_question']}\n\n"
+
+                # 현실 체크 (출처/신뢰도 포함)
                 if 'revenue_contribution' in matched_theme:
-                    analysis += f"⚠️ **현실 체크**: {matched_theme['revenue_contribution']}. "
-                    analysis += f"즉, 로봇 테마가 현재 실적에 미치는 영향은 제한적입니다. "
-                    analysis += f"이는 '미래 가치'에 대한 베팅임을 인지하셔야 합니다.\n\n"
+                    conf = matched_theme.get('revenue_confidence', 0)
+                    src = matched_theme.get('revenue_source', '')
+                    analysis += f"⚠️ **현실 체크**: {matched_theme['revenue_contribution']}\n"
+                    analysis += f"  └ 출처: {src} {confidence_badge(conf)}\n"
+                    analysis += f"  └ 즉, 로봇 테마가 현재 실적에 미치는 영향은 제한적입니다.\n"
+                    analysis += f"  └ 이는 '미래 가치'에 대한 베팅임을 인지하셔야 합니다.\n\n"
 
                 # 경쟁 구도
                 if 'competitors' in matched_theme:
+                    conf = matched_theme.get('competitors_confidence', 0)
+                    src = matched_theme.get('competitors_source', '')
                     analysis += f"**경쟁사**: {', '.join(matched_theme['competitors'])}\n"
-                    analysis += f"로봇 산업은 테슬라, 중국 업체 등 강력한 경쟁자들이 있습니다. "
-                    analysis += f"보스턴 다이나믹스의 기술력은 뛰어나지만, 상용화와 수익화는 별개의 문제입니다.\n\n"
+                    analysis += f"  └ 출처: {src} {confidence_badge(conf)}\n"
+                    analysis += f"  └ 보스턴 다이나믹스의 기술력은 뛰어나지만, 상용화와 수익화는 별개입니다.\n\n"
 
-                # 리스크
-                if 'risks' in matched_theme:
+                # 리스크 (개별 신뢰도 포함)
+                risks = matched_theme.get('risks', [])
+                if risks:
                     analysis += f"**핵심 리스크**:\n"
-                    for risk in matched_theme['risks']:
-                        analysis += f"  • {risk}\n"
+                    for r in risks:
+                        if isinstance(r, dict):
+                            conf = r.get('confidence', 0)
+                            src = r.get('source', '')
+                            analysis += f"  • {r['risk']} {confidence_badge(conf)}\n"
+                            analysis += f"    └ 근거: {src}\n"
+                        else:
+                            analysis += f"  • {r}\n"
                     analysis += "\n"
 
-                # 촉매
-                if 'catalysts' in matched_theme:
+                # 촉매 (개별 신뢰도 포함)
+                catalysts = matched_theme.get('catalysts', [])
+                if catalysts:
                     analysis += f"**주시할 촉매**:\n"
-                    for cat in matched_theme['catalysts']:
-                        analysis += f"  • {cat}\n"
+                    for c in catalysts:
+                        if isinstance(c, dict):
+                            conf = c.get('confidence', 0)
+                            src = c.get('source', '')
+                            analysis += f"  • {c['catalyst']} {confidence_badge(conf)}\n"
+                            analysis += f"    └ 근거: {src}\n"
+                        else:
+                            analysis += f"  • {c}\n"
 
                 recommendations.append(analysis)
             else:
