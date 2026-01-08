@@ -307,17 +307,18 @@ def render_portfolio_input():
     # ===== 새 포지션 추가 =====
     st.subheader("➕ 새 포지션 추가")
 
-    # 종목 검색
-    col_search, col_btn = st.columns([4, 1])
-    with col_search:
-        stock_query = st.text_input(
-            "종목 검색",
-            placeholder="현대차, 삼성전자, AAPL, TSLA 등",
-            key="stock_query",
-            label_visibility="collapsed"
-        )
-    with col_btn:
-        search_btn = st.button("🔍 검색", key="search_stock_btn", use_container_width=True)
+    # 종목 검색 (form으로 감싸서 Enter로 검색)
+    with st.form("search_stock_form", clear_on_submit=False):
+        col_search, col_btn = st.columns([4, 1])
+        with col_search:
+            stock_query = st.text_input(
+                "종목 검색",
+                placeholder="현대차, 삼성전자, AAPL, TSLA 등",
+                key="stock_query",
+                label_visibility="collapsed"
+            )
+        with col_btn:
+            search_btn = st.form_submit_button("🔍 검색", use_container_width=True)
 
     # 검색 버튼 클릭 시
     if search_btn and stock_query:
