@@ -20,6 +20,7 @@ from portfolio.thesis_evaluator import (
     ThesisEvaluator, ThesisRating, ThesisReport,
     ThesisReportHistory, ThesisReportManager
 )
+from portfolio.risk_monitor import RiskMonitor, AlertSeverity, AlertType
 
 # yfinance import (선택적)
 try:
@@ -821,6 +822,203 @@ def render_potential_reports(portfolio: Portfolio):
         st.info("📝 아직 축적된 보고서가 없습니다. '투자논리 평가' 탭에서 보고서를 생성해주세요.")
 
 
+def render_risk_alerts(portfolio: Portfolio):
+    """위험 경고 및 모니터링"""
+    st.subheader("🚨 위험 모니터링")
+
+    if not portfolio.positions:
+        st.info("포지션이 없습니다.")
+        return
+
+    # 리스크 모니터 초기화
+    if 'risk_monitor' not in st.session_state:
+        st.session_state.risk_monitor = RiskMonitor()
+    if 'last_risk_scan' not in st.session_state:
+        st.session_state.last_risk_scan = None
+
+    monitor = st.session_state.risk_monitor
+
+    # 스캔 버튼
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        scan_btn = st.button("🔍 전체 위험 스캔 실행", key="risk_scan_btn", type="primary", use_container_width=True)
+    with col2:
+        if st.session_state.last_risk_scan:
+            st.caption(f"마지막 스캔: {st.session_state.last_risk_scan.get('timestamp', '-')[:19]}")
+
+    if scan_btn:
+        with st.spinner("포트폴리오 위험 분석 중..."):
+            scan_result = monitor.run_full_scan(portfolio)
+            st.session_state.last_risk_scan = scan_result
+
+    # 스캔 결과 표시
+    if st.session_state.last_risk_scan:
+        scan = st.session_state.last_risk_scan
+        level = scan['overall_risk_level']
+        by_severity = scan['by_severity']
+
+        # 전체 위험 수준 표시
+        st.markdown("### 📊 전체 위험 수준")
+
+        if level == 'emergency':
+            st.error("🚨 **긴급**: 즉각적인 조치가 필요합니다!")
+        elif level == 'critical':
+            st.warning("🔴 **위험**: 주의가 필요한 상황입니다.")
+        elif level == 'warning':
+            st.info("⚠️ **주의**: 모니터링을 강화하세요.")
+        else:
+            st.success("✅ **정상**: 특별한 위험 신호가 없습니다.")
+
+        # 경고 수 표시
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("긴급", f"{by_severity['emergency']}건",
+                     delta="위험" if by_severity['emergency'] > 0 else None,
+                     delta_color="inverse")
+        with col2:
+            st.metric("위험", f"{by_severity['critical']}건",
+                     delta="주의" if by_severity['critical'] > 0 else None,
+                     delta_color="inverse")
+        with col3:
+            st.metric("주의", f"{by_severity['warning']}건")
+        with col4:
+            st.metric("참고", f"{by_severity['info']}건")
+
+        st.divider()
+
+        # 거시경제 현황
+        macro = scan.get('macro_summary', {})
+        if macro:
+            st.markdown("### 🌍 거시경제 현황")
+
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                vix = macro.get('vix')
+                if vix:
+                    vix_status = "위험" if vix > 30 else ("주의" if vix > 20 else "정상")
+                    vix_color = "inverse" if vix > 25 else "normal"
+                    st.metric("VIX (공포지수)", f"{vix:.1f}", delta=vix_status, delta_color=vix_color)
+
+            with col2:
+                t10y = macro.get('treasury_10y')
+                if t10y:
+                    st.metric("10년물 금리", f"{t10y:.2f}%")
+
+            with col3:
+                spread = macro.get('yield_spread')
+                if spread is not None:
+                    status = "역전!" if spread < 0 else "정상"
+                    st.metric("장단기 스프레드", f"{spread:.2f}%", delta=status,
+                             delta_color="inverse" if spread < 0 else "normal")
+
+            with col4:
+                sp500 = macro.get('sp500_5d_return')
+                if sp500:
+                    st.metric("S&P 500 (5일)", f"{sp500:+.1f}%",
+                             delta_color="inverse" if sp500 < -5 else "normal")
+
+            st.divider()
+
+        # 긴급/위험 경고 상세
+        emergency_alerts = scan.get('emergency_alerts', [])
+        critical_alerts = scan.get('critical_alerts', [])
+
+        if emergency_alerts or critical_alerts:
+            st.markdown("### 🔴 즉시 확인 필요")
+
+            for alert in emergency_alerts:
+                with st.container():
+                    st.error(f"**{alert['title']}**")
+                    st.write(alert['message'])
+                    st.caption(f"💡 권고: {alert['recommended_action']}")
+                    st.caption(f"트리거: {alert['triggered_by']} | 현재값: {alert['current_value']:.2f}")
+
+            for alert in critical_alerts:
+                with st.container():
+                    st.warning(f"**{alert['title']}**")
+                    st.write(alert['message'])
+                    st.caption(f"💡 권고: {alert['recommended_action']}")
+                    st.caption(f"트리거: {alert['triggered_by']} | 현재값: {alert['current_value']:.2f}")
+
+        # 주의/참고 경고
+        warning_alerts = scan.get('warning_alerts', [])
+        info_alerts = scan.get('info_alerts', [])
+
+        if warning_alerts:
+            with st.expander(f"⚠️ 주의 사항 ({len(warning_alerts)}건)", expanded=False):
+                for alert in warning_alerts:
+                    st.info(f"**{alert['title']}**\n\n{alert['message']}\n\n💡 {alert['recommended_action']}")
+
+        if info_alerts:
+            with st.expander(f"ℹ️ 참고 사항 ({len(info_alerts)}건)", expanded=False):
+                for alert in info_alerts:
+                    st.success(f"**{alert['title']}**\n\n{alert['message']}")
+
+        # 종목별 경고 요약
+        st.markdown("### 📋 종목별 경고 현황")
+        all_alerts = scan.get('all_alerts', [])
+
+        if all_alerts:
+            # 종목별로 그룹화
+            by_symbol = {}
+            for alert in all_alerts:
+                symbol = alert.symbol
+                if symbol not in by_symbol:
+                    by_symbol[symbol] = []
+                by_symbol[symbol].append(alert)
+
+            alert_data = []
+            for symbol, alerts in by_symbol.items():
+                if symbol == "MACRO":
+                    continue
+                severities = [a.severity.value for a in alerts]
+                worst = 'emergency' if 'emergency' in severities else (
+                    'critical' if 'critical' in severities else (
+                        'warning' if 'warning' in severities else 'info'
+                    )
+                )
+                emoji = {'emergency': '🚨', 'critical': '🔴', 'warning': '⚠️', 'info': 'ℹ️'}
+                alert_data.append({
+                    '상태': emoji.get(worst, ''),
+                    '종목': symbol,
+                    '경고 수': len(alerts),
+                    '주요 경고': alerts[0].alert_type.value if alerts else '-',
+                })
+
+            if alert_data:
+                st.dataframe(pd.DataFrame(alert_data), use_container_width=True, hide_index=True)
+        else:
+            st.success("모든 종목이 정상 범위 내에 있습니다.")
+
+    else:
+        st.info("💡 '전체 위험 스캔 실행' 버튼을 눌러 포트폴리오 위험을 분석하세요.")
+
+        # 간단한 거시경제 현황 미리보기
+        st.markdown("### 🌍 거시경제 간략 현황")
+        with st.spinner("데이터 로딩 중..."):
+            macro_preview = monitor.macro_fetcher.get_macro_summary()
+
+        if macro_preview.get('vix'):
+            col1, col2 = st.columns(2)
+            with col1:
+                vix = macro_preview['vix']
+                if vix > 30:
+                    st.error(f"VIX: {vix:.1f} - 극단적 공포")
+                elif vix > 20:
+                    st.warning(f"VIX: {vix:.1f} - 불안")
+                else:
+                    st.success(f"VIX: {vix:.1f} - 안정")
+
+            with col2:
+                spread = macro_preview.get('yield_spread')
+                if spread is not None:
+                    if spread < 0:
+                        st.error(f"장단기 스프레드: {spread:.2f}% (역전)")
+                    else:
+                        st.success(f"장단기 스프레드: {spread:.2f}%")
+
+
 def render_risk_return_analysis(portfolio: Portfolio):
     """리스크/리턴 분석"""
     st.subheader("📊 리스크/리턴 분석")
@@ -987,8 +1185,9 @@ def render_portfolio_page():
     portfolio.update_weights()
 
     # 탭 구성
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 요약",
+        "🚨 위험 경고",
         "🎯 투자논리 평가",
         "📜 잠재적 보고서",
         "📈 리스크/리턴",
@@ -1003,15 +1202,18 @@ def render_portfolio_page():
         render_allocation_charts(portfolio)
 
     with tab2:
-        render_thesis_evaluation(portfolio)
+        render_risk_alerts(portfolio)
 
     with tab3:
-        render_potential_reports(portfolio)
+        render_thesis_evaluation(portfolio)
 
     with tab4:
-        render_risk_return_analysis(portfolio)
+        render_potential_reports(portfolio)
 
     with tab5:
+        render_risk_return_analysis(portfolio)
+
+    with tab6:
         render_portfolio_recommendations(portfolio)
 
 
