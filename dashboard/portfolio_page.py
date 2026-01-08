@@ -18,6 +18,66 @@ from portfolio.portfolio import Portfolio, Position, AssetType, InvestmentThesis
 from portfolio.analyzer import PortfolioAnalyzer
 from portfolio.thesis_evaluator import ThesisEvaluator, ThesisRating
 
+# yfinance import (선택적)
+try:
+    import yfinance as yf
+    YFINANCE_AVAILABLE = True
+except ImportError:
+    YFINANCE_AVAILABLE = False
+
+# 기본 환율 (USD/KRW)
+DEFAULT_EXCHANGE_RATE = 1350.0
+
+
+def get_exchange_rate():
+    """환율 조회"""
+    if 'exchange_rate' not in st.session_state:
+        st.session_state.exchange_rate = DEFAULT_EXCHANGE_RATE
+    return st.session_state.exchange_rate
+
+
+def format_currency(value, currency='USD', exchange_rate=None):
+    """통화 포맷팅 (달러/원화 병기)"""
+    if exchange_rate is None:
+        exchange_rate = get_exchange_rate()
+
+    if currency == 'BOTH':
+        krw_value = value * exchange_rate
+        return f"${value:,.0f} (₩{krw_value:,.0f})"
+    elif currency == 'KRW':
+        krw_value = value * exchange_rate
+        return f"₩{krw_value:,.0f}"
+    else:
+        return f"${value:,.0f}"
+
+
+def search_stock(symbol: str):
+    """종목 검색 및 정보 조회"""
+    if not YFINANCE_AVAILABLE or not symbol:
+        return None
+
+    try:
+        ticker = yf.Ticker(symbol.upper())
+        info = ticker.info
+        hist = ticker.history(period='5d')
+
+        if hist.empty:
+            return None
+
+        current_price = hist['Close'].iloc[-1]
+
+        return {
+            'symbol': symbol.upper(),
+            'name': info.get('longName') or info.get('shortName') or symbol.upper(),
+            'current_price': round(current_price, 2),
+            'currency': info.get('currency', 'USD'),
+            'sector': info.get('sector', ''),
+            'industry': info.get('industry', ''),
+            'market_cap': info.get('marketCap'),
+        }
+    except Exception as e:
+        return None
+
 
 def render_portfolio_input():
     """포트폴리오 입력 UI"""
@@ -27,8 +87,11 @@ def render_portfolio_input():
     if 'portfolio' not in st.session_state:
         st.session_state.portfolio = Portfolio(name="My Portfolio")
 
-    # 샘플 로드 버튼
-    col1, col2 = st.columns([1, 4])
+    if 'stock_info' not in st.session_state:
+        st.session_state.stock_info = None
+
+    # 설정 영역
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
     with col1:
         if st.button("샘플 포트폴리오 로드"):
             st.session_state.portfolio = create_sample_portfolio()
@@ -39,22 +102,102 @@ def render_portfolio_input():
             st.session_state.portfolio = Portfolio(name="My Portfolio")
             st.rerun()
 
+    with col3:
+        currency_display = st.selectbox(
+            "통화 표시",
+            ["USD", "KRW", "BOTH"],
+            index=2,
+            key="currency_display"
+        )
+
+    with col4:
+        exchange_rate = st.number_input(
+            "환율 (USD/KRW)",
+            min_value=1000.0,
+            max_value=2000.0,
+            value=get_exchange_rate(),
+            step=10.0,
+            key="exchange_rate_input"
+        )
+        st.session_state.exchange_rate = exchange_rate
+
     st.divider()
 
     # 새 포지션 추가 폼
-    with st.expander("➕ 새 포지션 추가", expanded=False):
+    with st.expander("➕ 새 포지션 추가", expanded=True):
+        # 종목 검색
+        col1, col2 = st.columns([2, 3])
+
+        with col1:
+            search_symbol = st.text_input(
+                "🔍 종목 검색 (티커 입력 후 Enter)",
+                placeholder="예: AAPL, MSFT, 005930.KS",
+                key="search_symbol"
+            )
+
+        with col2:
+            if search_symbol and st.button("종목 검색", key="search_btn"):
+                with st.spinner("검색 중..."):
+                    info = search_stock(search_symbol)
+                    if info:
+                        st.session_state.stock_info = info
+                        st.success(f"✅ {info['name']} ({info['symbol']}) - 현재가: ${info['current_price']:,.2f}")
+                    else:
+                        st.error("종목을 찾을 수 없습니다.")
+                        st.session_state.stock_info = None
+
+        # 검색된 종목 정보 표시
+        stock_info = st.session_state.stock_info
+        if stock_info:
+            st.info(f"**{stock_info['name']}** | 현재가: ${stock_info['current_price']:,.2f} | 섹터: {stock_info.get('sector', 'N/A')}")
+
+        st.markdown("---")
+
         with st.form("add_position"):
             col1, col2, col3 = st.columns(3)
 
             with col1:
-                symbol = st.text_input("티커 심볼", placeholder="예: AAPL")
-                name = st.text_input("종목명", placeholder="예: Apple Inc.")
-                quantity = st.number_input("수량", min_value=0.0, value=10.0)
+                default_symbol = stock_info['symbol'] if stock_info else ""
+                default_name = stock_info['name'] if stock_info else ""
+                default_price = stock_info['current_price'] if stock_info else 100.0
+
+                symbol = st.text_input("티커 심볼", value=default_symbol, placeholder="예: AAPL")
+                name = st.text_input("종목명", value=default_name, placeholder="예: Apple Inc.")
+                quantity = st.number_input("수량", min_value=0.0, value=10.0, step=1.0)
 
             with col2:
-                avg_cost = st.number_input("평균 매수가", min_value=0.0, value=100.0)
-                target_price = st.number_input("목표가 (선택)", min_value=0.0, value=0.0)
-                stop_loss = st.number_input("손절가 (선택)", min_value=0.0, value=0.0)
+                st.markdown("**💰 가격 설정**")
+                avg_cost = st.number_input(
+                    "평균 매수가 ($)",
+                    min_value=0.0,
+                    value=default_price,
+                    step=0.01,
+                    format="%.2f"
+                )
+
+                st.markdown("**🎯 목표/손절 (% 기준)**")
+                target_pct = st.number_input(
+                    "목표 수익률 (%)",
+                    min_value=0.0,
+                    max_value=500.0,
+                    value=20.0,
+                    step=5.0,
+                    help="매수가 대비 목표 수익률"
+                )
+                stop_loss_pct = st.number_input(
+                    "손절 비율 (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=10.0,
+                    step=1.0,
+                    help="매수가 대비 손절 비율"
+                )
+
+                # 목표가/손절가 계산 및 표시
+                if avg_cost > 0:
+                    target_price = avg_cost * (1 + target_pct / 100)
+                    stop_loss_price = avg_cost * (1 - stop_loss_pct / 100)
+                    st.caption(f"목표가: ${target_price:,.2f} | 손절가: ${stop_loss_price:,.2f}")
 
             with col3:
                 asset_type = st.selectbox("자산 유형", [t.value for t in AssetType])
@@ -67,27 +210,33 @@ def render_portfolio_input():
                 height=100
             )
 
-            submitted = st.form_submit_button("포지션 추가")
+            submitted = st.form_submit_button("✅ 포지션 추가", use_container_width=True)
 
             if submitted and symbol:
                 # 자산 유형/투자 논리 변환
                 asset_type_enum = next((t for t in AssetType if t.value == asset_type), AssetType.STOCK)
                 thesis_type_enum = next((t for t in InvestmentThesis if t.value == thesis_type), InvestmentThesis.OTHER)
 
+                # 목표가/손절가 계산
+                calc_target = avg_cost * (1 + target_pct / 100) if target_pct > 0 else None
+                calc_stop = avg_cost * (1 - stop_loss_pct / 100) if stop_loss_pct > 0 else None
+
                 position = Position(
                     symbol=symbol.upper(),
                     name=name or symbol.upper(),
                     quantity=quantity,
                     avg_cost=avg_cost,
+                    current_price=stock_info['current_price'] if stock_info and stock_info['symbol'] == symbol.upper() else avg_cost,
                     asset_type=asset_type_enum,
                     thesis_type=thesis_type_enum,
                     thesis_description=thesis_description,
-                    target_price=target_price if target_price > 0 else None,
-                    stop_loss=stop_loss if stop_loss > 0 else None,
+                    target_price=calc_target,
+                    stop_loss=calc_stop,
                     time_horizon=time_horizon,
                 )
 
                 st.session_state.portfolio.add_position(position)
+                st.session_state.stock_info = None  # 검색 정보 초기화
                 st.success(f"{symbol.upper()} 추가됨!")
                 st.rerun()
 
@@ -98,18 +247,20 @@ def render_portfolio_summary(portfolio: Portfolio):
     """포트폴리오 요약"""
     st.subheader("📊 포트폴리오 요약")
 
+    currency = st.session_state.get('currency_display', 'BOTH')
+
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric(
             "총 평가금액",
-            f"${portfolio.total_market_value:,.0f}",
+            format_currency(portfolio.total_market_value, currency),
         )
 
     with col2:
         st.metric(
             "총 투자원금",
-            f"${portfolio.total_cost_basis:,.0f}",
+            format_currency(portfolio.total_cost_basis, currency),
         )
 
     with col3:
@@ -117,7 +268,7 @@ def render_portfolio_summary(portfolio: Portfolio):
         pnl_pct = portfolio.total_unrealized_pnl_pct
         st.metric(
             "미실현 손익",
-            f"${pnl:,.0f}",
+            format_currency(pnl, currency),
             delta=f"{pnl_pct:+.2f}%"
         )
 
@@ -136,20 +287,45 @@ def render_positions_table(portfolio: Portfolio):
         st.info("포지션이 없습니다. 위에서 포지션을 추가하세요.")
         return
 
+    currency = st.session_state.get('currency_display', 'BOTH')
+    exchange_rate = get_exchange_rate()
+
     # 데이터프레임 생성
     data = []
     for p in portfolio.positions:
+        # 목표가/손절가 퍼센트 계산
+        target_pct = ((p.target_price / p.avg_cost - 1) * 100) if p.target_price and p.avg_cost > 0 else None
+        stop_pct = ((1 - p.stop_loss / p.avg_cost) * 100) if p.stop_loss and p.avg_cost > 0 else None
+
+        # 가격 포맷팅
+        if currency == 'BOTH':
+            avg_cost_str = f"${p.avg_cost:.2f} (₩{p.avg_cost * exchange_rate:,.0f})"
+            current_str = f"${p.current_price:.2f} (₩{p.current_price * exchange_rate:,.0f})" if p.current_price else "-"
+            market_val_str = f"${p.market_value:,.0f} (₩{p.market_value * exchange_rate:,.0f})" if p.market_value else "-"
+            pnl_str = f"${p.unrealized_pnl:,.0f} (₩{p.unrealized_pnl * exchange_rate:,.0f})" if p.unrealized_pnl else "-"
+        elif currency == 'KRW':
+            avg_cost_str = f"₩{p.avg_cost * exchange_rate:,.0f}"
+            current_str = f"₩{p.current_price * exchange_rate:,.0f}" if p.current_price else "-"
+            market_val_str = f"₩{p.market_value * exchange_rate:,.0f}" if p.market_value else "-"
+            pnl_str = f"₩{p.unrealized_pnl * exchange_rate:,.0f}" if p.unrealized_pnl else "-"
+        else:
+            avg_cost_str = f"${p.avg_cost:.2f}"
+            current_str = f"${p.current_price:.2f}" if p.current_price else "-"
+            market_val_str = f"${p.market_value:,.0f}" if p.market_value else "-"
+            pnl_str = f"${p.unrealized_pnl:,.0f}" if p.unrealized_pnl else "-"
+
         data.append({
             '티커': p.symbol,
             '종목명': p.name,
             '수량': p.quantity,
-            '평균단가': f"${p.avg_cost:.2f}",
-            '현재가': f"${p.current_price:.2f}" if p.current_price else "-",
-            '평가금액': f"${p.market_value:,.0f}" if p.market_value else "-",
-            '손익': f"${p.unrealized_pnl:,.0f}" if p.unrealized_pnl else "-",
+            '평균단가': avg_cost_str,
+            '현재가': current_str,
+            '평가금액': market_val_str,
+            '손익': pnl_str,
             '손익률': f"{p.unrealized_pnl_pct:+.2f}%" if p.unrealized_pnl_pct else "-",
+            '목표': f"+{target_pct:.0f}%" if target_pct else "-",
+            '손절': f"-{stop_pct:.0f}%" if stop_pct else "-",
             '비중': f"{p.weight:.1f}%" if p.weight else "-",
-            '투자논리': p.thesis_type.value,
         })
 
     df = pd.DataFrame(data)
