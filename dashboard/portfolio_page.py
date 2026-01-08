@@ -107,31 +107,23 @@ def search_stock(symbol: str):
 
 
 def render_portfolio_input():
-    """포트폴리오 입력 UI"""
+    """포트폴리오 입력 UI - 간단한 버전"""
     st.subheader("📝 포트폴리오 입력")
 
-    # 세션 상태 초기화 (빈 포트폴리오로 시작)
+    # 세션 상태 초기화
     if 'portfolio' not in st.session_state:
         st.session_state.portfolio = Portfolio(name="My Portfolio")
-
-    if 'stock_info' not in st.session_state:
-        st.session_state.stock_info = None
-
-    # yfinance 상태 표시
-    if not YFINANCE_AVAILABLE:
-        st.warning("⚠️ yfinance가 설치되지 않아 종목 검색이 불가능합니다. `pip install yfinance`로 설치하세요.")
 
     # 설정 영역
     col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
     with col1:
-        if st.button("샘플 포트폴리오 로드", key="load_sample_btn"):
+        if st.button("📂 샘플 로드", key="load_sample_btn"):
             st.session_state.portfolio = create_sample_portfolio()
             st.rerun()
 
     with col2:
-        if st.button("포트폴리오 초기화", key="reset_portfolio_btn"):
+        if st.button("🗑️ 초기화", key="reset_portfolio_btn"):
             st.session_state.portfolio = Portfolio(name="My Portfolio")
-            st.session_state.stock_info = None
             st.rerun()
 
     with col3:
@@ -155,131 +147,77 @@ def render_portfolio_input():
 
     st.divider()
 
-    # 새 포지션 추가 폼
-    with st.expander("➕ 새 포지션 추가", expanded=True):
-        # 종목 검색 (폼 외부)
-        st.markdown("##### 🔍 종목 검색")
-        search_col1, search_col2 = st.columns([3, 1])
+    # ===== 새 포지션 추가 (심플 폼) =====
+    st.subheader("➕ 새 포지션 추가")
 
-        with search_col1:
-            search_symbol = st.text_input(
-                "티커 심볼 입력",
-                placeholder="예: AAPL, MSFT, GOOGL, 005930.KS",
-                key="search_symbol",
-                label_visibility="collapsed"
-            )
+    with st.form("add_position_form", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
 
-        with search_col2:
-            search_clicked = st.button("🔍 검색", key="search_btn", use_container_width=True)
+        with col1:
+            symbol = st.text_input("티커 심볼 *", placeholder="AAPL", key="form_symbol")
+            name = st.text_input("종목명", placeholder="Apple Inc.", key="form_name")
+            quantity = st.number_input("수량 *", min_value=1.0, value=10.0, step=1.0, key="form_qty")
 
-        # 검색 실행
-        if search_clicked:
-            if not search_symbol:
-                st.warning("티커 심볼을 입력하세요.")
-            elif not YFINANCE_AVAILABLE:
-                st.error("yfinance가 설치되지 않았습니다.")
+        with col2:
+            avg_cost = st.number_input("평균 매수가 ($) *", min_value=0.01, value=100.0, step=1.0, key="form_cost")
+            target_pct = st.number_input("목표 수익률 (%)", min_value=0.0, value=20.0, step=5.0, key="form_target")
+            stop_loss_pct = st.number_input("손절 비율 (%)", min_value=0.0, value=10.0, step=1.0, key="form_stop")
+
+        with col3:
+            asset_type = st.selectbox("자산 유형", [t.value for t in AssetType], key="form_asset")
+            thesis_type = st.selectbox("투자 논리", [t.value for t in InvestmentThesis], key="form_thesis")
+            time_horizon = st.selectbox("투자 기간", ["단기", "중기", "장기"], key="form_horizon")
+
+        thesis_desc = st.text_input("매수 이유 (선택)", placeholder="예: AI 성장주, 배당 투자 등", key="form_desc")
+
+        # 목표가/손절가 미리보기
+        if avg_cost > 0:
+            target_price = avg_cost * (1 + target_pct / 100)
+            stop_price = avg_cost * (1 - stop_loss_pct / 100)
+            st.caption(f"📊 목표가: ${target_price:,.2f} (+{target_pct}%) | 손절가: ${stop_price:,.2f} (-{stop_loss_pct}%)")
+
+        submitted = st.form_submit_button("✅ 포지션 추가", use_container_width=True, type="primary")
+
+        if submitted:
+            if not symbol:
+                st.error("티커 심볼을 입력하세요.")
+            elif quantity <= 0:
+                st.error("수량을 입력하세요.")
+            elif avg_cost <= 0:
+                st.error("매수가를 입력하세요.")
             else:
-                with st.spinner(f"{search_symbol.upper()} 검색 중..."):
-                    info = search_stock(search_symbol)
-                    if info:
-                        st.session_state.stock_info = info
-                        st.rerun()  # 폼 기본값 업데이트를 위해 리런
-                    else:
-                        st.error(f"'{search_symbol}' 종목을 찾을 수 없습니다. 티커를 확인하세요.")
-                        st.session_state.stock_info = None
+                # Enum 변환
+                asset_enum = next((t for t in AssetType if t.value == asset_type), AssetType.STOCK)
+                thesis_enum = next((t for t in InvestmentThesis if t.value == thesis_type), InvestmentThesis.OTHER)
 
-        # 검색된 종목 정보 표시
-        stock_info = st.session_state.stock_info
-        if stock_info:
-            st.success(f"✅ **{stock_info['name']}** ({stock_info['symbol']}) | 현재가: ${stock_info['current_price']:,.2f} | 섹터: {stock_info.get('sector', 'N/A') or '정보없음'}")
-
-        st.markdown("---")
-
-        with st.form("add_position"):
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                default_symbol = stock_info['symbol'] if stock_info else ""
-                default_name = stock_info['name'] if stock_info else ""
-                default_price = stock_info['current_price'] if stock_info else 100.0
-
-                symbol = st.text_input("티커 심볼", value=default_symbol, placeholder="예: AAPL")
-                name = st.text_input("종목명", value=default_name, placeholder="예: Apple Inc.")
-                quantity = st.number_input("수량", min_value=0.0, value=10.0, step=1.0)
-
-            with col2:
-                st.markdown("**💰 가격 설정**")
-                avg_cost = st.number_input(
-                    "평균 매수가 ($)",
-                    min_value=0.0,
-                    value=default_price,
-                    step=0.01,
-                    format="%.2f"
-                )
-
-                st.markdown("**🎯 목표/손절 (% 기준)**")
-                target_pct = st.number_input(
-                    "목표 수익률 (%)",
-                    min_value=0.0,
-                    max_value=500.0,
-                    value=20.0,
-                    step=5.0,
-                    help="매수가 대비 목표 수익률"
-                )
-                stop_loss_pct = st.number_input(
-                    "손절 비율 (%)",
-                    min_value=0.0,
-                    max_value=100.0,
-                    value=10.0,
-                    step=1.0,
-                    help="매수가 대비 손절 비율"
-                )
-
-                # 목표가/손절가 계산 및 표시
-                if avg_cost > 0:
-                    target_price = avg_cost * (1 + target_pct / 100)
-                    stop_loss_price = avg_cost * (1 - stop_loss_pct / 100)
-                    st.caption(f"목표가: ${target_price:,.2f} | 손절가: ${stop_loss_price:,.2f}")
-
-            with col3:
-                asset_type = st.selectbox("자산 유형", [t.value for t in AssetType])
-                thesis_type = st.selectbox("투자 논리 유형", [t.value for t in InvestmentThesis])
-                time_horizon = st.selectbox("투자 기간", ["단기", "중기", "장기"])
-
-            thesis_description = st.text_area(
-                "📌 매수 이유 (왜 이 종목을 샀나요?)",
-                placeholder="예: AI 칩 시장 독점적 지위. 데이터센터 GPU 수요 급증 예상...",
-                height=100
-            )
-
-            submitted = st.form_submit_button("✅ 포지션 추가", use_container_width=True)
-
-            if submitted and symbol:
-                # 자산 유형/투자 논리 변환
-                asset_type_enum = next((t for t in AssetType if t.value == asset_type), AssetType.STOCK)
-                thesis_type_enum = next((t for t in InvestmentThesis if t.value == thesis_type), InvestmentThesis.OTHER)
-
-                # 목표가/손절가 계산
-                calc_target = avg_cost * (1 + target_pct / 100) if target_pct > 0 else None
-                calc_stop = avg_cost * (1 - stop_loss_pct / 100) if stop_loss_pct > 0 else None
+                # 현재가 조회 시도
+                current_price = avg_cost
+                if YFINANCE_AVAILABLE:
+                    try:
+                        info = search_stock(symbol)
+                        if info:
+                            current_price = info['current_price']
+                            if not name:
+                                name = info['name']
+                    except Exception:
+                        pass
 
                 position = Position(
-                    symbol=symbol.upper(),
+                    symbol=symbol.upper().strip(),
                     name=name or symbol.upper(),
                     quantity=quantity,
                     avg_cost=avg_cost,
-                    current_price=stock_info['current_price'] if stock_info and stock_info['symbol'] == symbol.upper() else avg_cost,
-                    asset_type=asset_type_enum,
-                    thesis_type=thesis_type_enum,
-                    thesis_description=thesis_description,
-                    target_price=calc_target,
-                    stop_loss=calc_stop,
+                    current_price=current_price,
+                    asset_type=asset_enum,
+                    thesis_type=thesis_enum,
+                    thesis_description=thesis_desc,
+                    target_price=avg_cost * (1 + target_pct / 100) if target_pct > 0 else None,
+                    stop_loss=avg_cost * (1 - stop_loss_pct / 100) if stop_loss_pct > 0 else None,
                     time_horizon=time_horizon,
                 )
 
                 st.session_state.portfolio.add_position(position)
-                st.session_state.stock_info = None  # 검색 정보 초기화
-                st.success(f"{symbol.upper()} 추가됨!")
+                st.success(f"✅ {symbol.upper()} 추가 완료!")
                 st.rerun()
 
     return st.session_state.portfolio
