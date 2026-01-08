@@ -14,7 +14,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from portfolio.portfolio import Portfolio, Position, AssetType, InvestmentThesis, create_sample_portfolio
+from portfolio.portfolio import Portfolio, Position, AssetType, InvestmentThesis
 from portfolio.analyzer import PortfolioAnalyzer
 from portfolio.thesis_evaluator import ThesisEvaluator, ThesisRating
 
@@ -270,19 +270,15 @@ def render_portfolio_input():
         st.session_state.searched_stock = None
 
     # 설정 영역
-    col1, col2, col3, col4 = st.columns([1, 1, 1.5, 2])
-    with col1:
-        if st.button("📂 샘플 로드", key="load_sample_btn"):
-            st.session_state.portfolio = create_sample_portfolio()
-            st.rerun()
+    col1, col2, col3 = st.columns([1, 1.5, 2])
 
-    with col2:
+    with col1:
         if st.button("🗑️ 초기화", key="reset_portfolio_btn"):
             st.session_state.portfolio = Portfolio(name="My Portfolio")
             st.session_state.last_price_update = None
-            st.rerun()
+            st.session_state.searched_stock = None
 
-    with col3:
+    with col2:
         # 실시간 가격 업데이트 버튼
         if st.button("🔄 전체 가격 새로고침", key="update_prices_btn"):
             if st.session_state.portfolio.positions:
@@ -291,9 +287,8 @@ def render_portfolio_input():
                     st.session_state.last_price_update = datetime.now()
                     if updated > 0:
                         st.success(f"✅ {updated}개 종목 업데이트!")
-                    st.rerun()
 
-    with col4:
+    with col3:
         c1, c2 = st.columns(2)
         with c1:
             currency_display = st.selectbox("통화", ["USD", "KRW", "BOTH"], index=0, key="currency_display")

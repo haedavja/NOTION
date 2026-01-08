@@ -16,10 +16,10 @@ import os
 # 상위 디렉토리 import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from data.macro_indicators import MacroIndicators, get_sample_macro_data
-from data.market_data import MarketData, get_sample_market_data
-from data.fund_flow import FundFlowTracker, get_sample_fund_flow
-from data.news_collector import NewsCollector, get_sample_news
+from data.macro_indicators import MacroIndicators
+from data.market_data import MarketData
+from data.fund_flow import FundFlowTracker
+from data.news_collector import NewsCollector
 from analysis.macro_analysis import MacroAnalyzer
 from analysis.flow_analysis import FlowAnalyzer
 from analysis.sentiment import SentimentAnalyzer
@@ -28,7 +28,7 @@ from prediction.probability_model import ProbabilityModel
 from prediction.scenarios import ScenarioAnalyzer
 
 # 포트폴리오 모듈
-from portfolio.portfolio import Portfolio, Position, create_sample_portfolio
+from portfolio.portfolio import Portfolio, Position
 from portfolio.analyzer import PortfolioAnalyzer
 from portfolio.thesis_evaluator import ThesisEvaluator, ThesisRating
 
@@ -98,17 +98,6 @@ try:
     YFINANCE_AVAILABLE = True
 except ImportError:
     YFINANCE_AVAILABLE = False
-
-
-@st.cache_data(ttl=3600)
-def load_sample_data():
-    """샘플 데이터 로드 (캐시됨)"""
-    return {
-        'macro': get_sample_macro_data(),
-        'market': get_sample_market_data(),
-        'fund_flow': get_sample_fund_flow(),
-        'news': get_sample_news(),
-    }
 
 
 @st.cache_data(ttl=300)  # 5분 캐시
@@ -315,18 +304,6 @@ def main():
     # 사이드바
     st.sidebar.title("⚙️ 설정")
 
-    # 데이터 소스 선택
-    data_source = st.sidebar.radio(
-        "데이터 소스",
-        ["샘플 데이터", "실시간 데이터 (API 필요)"]
-    )
-
-    # API 키 입력 (실시간 데이터 선택 시)
-    if data_source == "실시간 데이터 (API 필요)":
-        st.sidebar.subheader("API 키 설정")
-        fred_key = st.sidebar.text_input("FRED API Key", type="password")
-        news_key = st.sidebar.text_input("News API Key", type="password")
-
     # 분석 기간
     analysis_period = st.sidebar.selectbox(
         "분석 기간",
@@ -340,22 +317,21 @@ def main():
     sentiment_weight = st.sidebar.slider("센티먼트", 0.0, 1.0, 0.20, 0.05)
     technical_weight = st.sidebar.slider("기술적", 0.0, 1.0, 0.25, 0.05)
 
-    # 데이터 로드
-    if data_source == "샘플 데이터":
-        data = load_sample_data()
-    else:
-        # 실시간 데이터 시도
-        if YFINANCE_AVAILABLE:
-            with st.spinner("실시간 데이터 로딩 중..."):
-                data = load_realtime_data()
-            if data:
-                st.success("✅ 실시간 데이터 로드 완료!")
-            else:
-                st.warning("실시간 데이터 로드 실패. 샘플 데이터를 사용합니다.")
-                data = load_sample_data()
+    # 실시간 데이터 로드
+    if YFINANCE_AVAILABLE:
+        with st.spinner("실시간 데이터 로딩 중..."):
+            data = load_realtime_data()
+        if data:
+            st.sidebar.success("✅ 실시간 데이터")
         else:
-            st.warning("yfinance가 설치되지 않았습니다. 샘플 데이터를 사용합니다.")
-            data = load_sample_data()
+            st.sidebar.warning("⏳ 데이터 로드 중...")
+    else:
+        st.sidebar.error("yfinance 설치 필요: pip install yfinance")
+        st.stop()
+
+    if not data:
+        st.error("데이터를 불러올 수 없습니다. 페이지를 새로고침해주세요.")
+        st.stop()
 
     # 분석기 초기화
     macro_analyzer = MacroAnalyzer()
