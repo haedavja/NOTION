@@ -5,10 +5,22 @@ from .thesis_evaluator import (
     ThesisReport, ThesisReportHistory, ThesisReportManager
 )
 from .risk_monitor import RiskMonitor, AlertSeverity, AlertType, RiskAlert
+from .data_store import DataStore, data_store
+from .performance_tracker import (
+    PerformanceTracker, Trade, PerformanceSnapshot, performance_tracker
+)
+from .multi_portfolio import (
+    MultiPortfolioManager, PortfolioType, PortfolioMeta,
+    WatchlistItem, portfolio_manager
+)
 
 __all__ = [
     'Portfolio', 'Position', 'PortfolioAnalyzer',
     'ThesisEvaluator', 'ThesisRating', 'ThesisEvaluation',
     'ThesisReport', 'ThesisReportHistory', 'ThesisReportManager',
-    'RiskMonitor', 'AlertSeverity', 'AlertType', 'RiskAlert'
+    'RiskMonitor', 'AlertSeverity', 'AlertType', 'RiskAlert',
+    'DataStore', 'data_store',
+    'PerformanceTracker', 'Trade', 'PerformanceSnapshot', 'performance_tracker',
+    'MultiPortfolioManager', 'PortfolioType', 'PortfolioMeta',
+    'WatchlistItem', 'portfolio_manager'
 ]

@@ -51,6 +51,13 @@ try:
 except ImportError:
     KOREA_AVAILABLE = False
 
+try:
+    from dashboard.advanced_features import render_advanced_features
+    from dashboard.alert_settings import render_alert_settings
+    ADVANCED_AVAILABLE = True
+except ImportError:
+    ADVANCED_AVAILABLE = False
+
 
 # 페이지 설정
 st.set_page_config(
@@ -537,10 +544,11 @@ def main():
         "💼 포트폴리오 분석",
         "📈 백테스트",
         "🤖 AI 분석",
-        "🇰🇷 한국 주식"
+        "🇰🇷 한국 주식",
+        "🔧 고급 기능"
     ]
     tabs = st.tabs(tab_names)
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = tabs
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = tabs
 
     # ========== 탭 1: 종합 예측 ==========
     with tab1:
@@ -836,6 +844,14 @@ def main():
             **필요한 패키지:**
             - pykrx (KRX 데이터용)
             """)
+
+    # ========== 탭 10: 고급 기능 ==========
+    with tab10:
+        if ADVANCED_AVAILABLE:
+            render_advanced_features()
+        else:
+            st.warning("고급 기능 모듈을 사용할 수 없습니다.")
+            st.info("advanced_features 모듈을 확인하세요.")
 
     # 푸터
     st.divider()
