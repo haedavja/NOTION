@@ -882,21 +882,18 @@ class ThesisEvaluator:
             if matched_theme and matched_theme_key in ['로봇', 'robot']:
                 analysis = f"🤖 **{name} 로봇 사업 분석**\n\n"
 
-                # 자회사/핵심 정보 (간결하게)
+                # 자회사/핵심 정보 (신뢰도만)
                 if 'subsidiary' in matched_theme:
                     conf = matched_theme.get('subsidiary_confidence', 0)
-                    src = matched_theme.get('subsidiary_source', '')
-                    analysis += f"• **핵심 자회사**: {matched_theme['subsidiary']} (신뢰도 {conf}%) [출처: {src}]\n"
+                    analysis += f"• **핵심 자회사**: {matched_theme['subsidiary']} {conf_icon(conf)}\n"
 
                 if 'acquisition' in matched_theme:
                     conf = matched_theme.get('acquisition_confidence', 0)
-                    src = matched_theme.get('acquisition_source', '')
-                    analysis += f"• **인수 정보**: {matched_theme['acquisition']} (신뢰도 {conf}%) [출처: {src}]\n"
+                    analysis += f"• **인수 정보**: {matched_theme['acquisition']} {conf_icon(conf)}\n"
 
                 if 'products' in matched_theme:
                     conf = matched_theme.get('products_confidence', 0)
-                    src = matched_theme.get('products_source', '')
-                    analysis += f"• **주요 제품**: {', '.join(matched_theme['products'])} (신뢰도 {conf}%) [출처: {src}]\n"
+                    analysis += f"• **주요 제품**: {', '.join(matched_theme['products'])} {conf_icon(conf)}\n"
 
                 analysis += "\n"
 
@@ -911,7 +908,7 @@ class ThesisEvaluator:
                 # 현실 체크 (간결하게)
                 if 'revenue_contribution' in matched_theme:
                     conf = matched_theme.get('revenue_confidence', 0)
-                    analysis += f"⚠️ **현실**: {matched_theme['revenue_contribution']} {conf_icon(conf)} → 미래 가치 베팅\n\n"
+                    analysis += f"⚠️ **현실**: {matched_theme['revenue_contribution']} {conf_icon(conf)}\n\n"
 
                 # 경쟁 구도
                 if 'competitors' in matched_theme:
