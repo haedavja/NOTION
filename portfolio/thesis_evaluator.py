@@ -7,8 +7,10 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+import json
+import os
 
 try:
     import yfinance as yf
@@ -47,6 +49,157 @@ class ThesisEvaluation:
     weaknesses: List[str]           # 약점
     recommendations: List[str]       # 권고사항
     probability_assessment: Dict     # 확률적 평가
+
+
+@dataclass
+class ThesisReport:
+    """개별 잠재적 보고서 (시점별 스냅샷)"""
+    report_id: str
+    symbol: str
+    timestamp: datetime
+
+    # 투자 논리 스냅샷
+    thesis_description: str
+    thesis_type: str
+
+    # 가격 정보
+    price_at_report: float
+    buy_price: float
+    target_price: Optional[float]
+    stop_loss: Optional[float]
+
+    # 평가 점수
+    rating: str                     # ThesisRating.value
+    score: float                    # -1 ~ 1
+
+    # 리스크/리턴 분석
+    upside_potential: float         # 상승 여력 %
+    downside_risk: float            # 하락 위험 %
+    risk_reward_ratio: float
+    target_probability: float       # 목표가 도달 확률
+
+    # 핵심 관찰 사항
+    key_observations: List[str]     # 주요 관찰점
+    risk_flags: List[str]           # 리스크 플래그
+    catalyst_updates: List[str]     # 촉매 업데이트
+
+    # 상태 변화
+    price_change_from_buy: float    # 매수가 대비 변화율
+    score_change: Optional[float]   # 이전 보고서 대비 점수 변화
+    status: str                     # 'active', 'target_reached', 'stopped_out', 'thesis_invalidated'
+
+    def to_dict(self) -> Dict:
+        """딕셔너리로 변환 (저장용)"""
+        return {
+            'report_id': self.report_id,
+            'symbol': self.symbol,
+            'timestamp': self.timestamp.isoformat(),
+            'thesis_description': self.thesis_description,
+            'thesis_type': self.thesis_type,
+            'price_at_report': self.price_at_report,
+            'buy_price': self.buy_price,
+            'target_price': self.target_price,
+            'stop_loss': self.stop_loss,
+            'rating': self.rating,
+            'score': self.score,
+            'upside_potential': self.upside_potential,
+            'downside_risk': self.downside_risk,
+            'risk_reward_ratio': self.risk_reward_ratio,
+            'target_probability': self.target_probability,
+            'key_observations': self.key_observations,
+            'risk_flags': self.risk_flags,
+            'catalyst_updates': self.catalyst_updates,
+            'price_change_from_buy': self.price_change_from_buy,
+            'score_change': self.score_change,
+            'status': self.status,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'ThesisReport':
+        """딕셔너리에서 생성"""
+        data['timestamp'] = datetime.fromisoformat(data['timestamp'])
+        return cls(**data)
+
+
+@dataclass
+class ThesisReportHistory:
+    """종목별 잠재적 보고서 히스토리"""
+    symbol: str
+    reports: List[ThesisReport] = field(default_factory=list)
+
+    def add_report(self, report: ThesisReport):
+        """보고서 추가"""
+        self.reports.append(report)
+        # 시간순 정렬
+        self.reports.sort(key=lambda r: r.timestamp)
+
+    def get_latest(self) -> Optional[ThesisReport]:
+        """최신 보고서 조회"""
+        return self.reports[-1] if self.reports else None
+
+    def get_trend(self, days: int = 30) -> Dict:
+        """최근 N일간 트렌드 분석"""
+        cutoff = datetime.now() - timedelta(days=days)
+        recent = [r for r in self.reports if r.timestamp >= cutoff]
+
+        if len(recent) < 2:
+            return {'trend': 'insufficient_data', 'reports': len(recent)}
+
+        # 점수 추이
+        scores = [r.score for r in recent]
+        score_trend = scores[-1] - scores[0]
+
+        # 가격 추이
+        prices = [r.price_at_report for r in recent]
+        price_trend = (prices[-1] / prices[0] - 1) * 100 if prices[0] > 0 else 0
+
+        # 리스크 플래그 누적
+        all_risks = []
+        for r in recent:
+            all_risks.extend(r.risk_flags)
+
+        return {
+            'trend': 'improving' if score_trend > 0.1 else ('declining' if score_trend < -0.1 else 'stable'),
+            'score_change': score_trend,
+            'price_change': price_trend,
+            'reports_count': len(recent),
+            'first_date': recent[0].timestamp,
+            'last_date': recent[-1].timestamp,
+            'recurring_risks': list(set(all_risks)),
+        }
+
+    def get_summary(self) -> Dict:
+        """전체 히스토리 요약"""
+        if not self.reports:
+            return {'status': 'no_data'}
+
+        latest = self.reports[-1]
+        first = self.reports[0]
+
+        # 전체 기간 분석
+        total_days = (latest.timestamp - first.timestamp).days
+
+        # 점수 변화 추이
+        scores = [r.score for r in self.reports]
+        avg_score = np.mean(scores)
+        score_volatility = np.std(scores)
+
+        # 상태 변화 히스토리
+        status_history = [(r.timestamp.strftime('%Y-%m-%d'), r.status) for r in self.reports]
+
+        return {
+            'symbol': self.symbol,
+            'first_report': first.timestamp.isoformat(),
+            'latest_report': latest.timestamp.isoformat(),
+            'total_reports': len(self.reports),
+            'tracking_days': total_days,
+            'current_status': latest.status,
+            'current_score': latest.score,
+            'avg_score': avg_score,
+            'score_volatility': score_volatility,
+            'price_change_total': latest.price_change_from_buy,
+            'status_history': status_history[-5:],  # 최근 5개
+        }
 
 
 class ThesisEvaluator:
@@ -1097,4 +1250,362 @@ class ThesisEvaluator:
                 'rating': weakest.rating.value,
             } if weakest else None,
             'key_recommendations': list(set(all_recommendations))[:5],
+        }
+
+    # ==================== 잠재적 보고서 시스템 ====================
+
+    def generate_potential_report(
+        self, position: Position, evaluation: ThesisEvaluation,
+        previous_report: Optional[ThesisReport] = None
+    ) -> ThesisReport:
+        """잠재적 보고서 생성 - 리스크/리턴 분석 포함"""
+        import uuid
+
+        prob = evaluation.probability_assessment
+        risk = evaluation.risk_assessment
+
+        # 상승 여력/하락 위험 계산
+        upside = prob.get('upside_potential', 0)
+        downside = prob.get('downside_risk', 0)
+        rr_ratio = prob.get('risk_reward_ratio', 0)
+        target_prob = prob.get('target_probability', 50)
+
+        # 매수가 대비 현재 가격 변화율
+        price_change = 0
+        if position.avg_cost and position.avg_cost > 0 and position.current_price:
+            price_change = (position.current_price / position.avg_cost - 1) * 100
+
+        # 점수 변화 (이전 보고서 대비)
+        score_change = None
+        if previous_report:
+            score_change = evaluation.score - previous_report.score
+
+        # 상태 결정
+        status = self._determine_position_status(position, evaluation)
+
+        # 핵심 관찰 사항 추출
+        key_observations = self._extract_key_observations(position, evaluation)
+
+        # 리스크 플래그 추출
+        risk_flags = self._extract_risk_flags(evaluation, risk)
+
+        # 촉매 업데이트 추출
+        catalyst_updates = self._extract_catalyst_updates(position, evaluation)
+
+        return ThesisReport(
+            report_id=str(uuid.uuid4())[:8],
+            symbol=position.symbol,
+            timestamp=datetime.now(),
+            thesis_description=position.thesis_description or '',
+            thesis_type=position.thesis_type.value,
+            price_at_report=position.current_price or 0,
+            buy_price=position.avg_cost,
+            target_price=position.target_price,
+            stop_loss=position.stop_loss,
+            rating=evaluation.rating.value,
+            score=evaluation.score,
+            upside_potential=upside,
+            downside_risk=downside,
+            risk_reward_ratio=rr_ratio,
+            target_probability=target_prob,
+            key_observations=key_observations,
+            risk_flags=risk_flags,
+            catalyst_updates=catalyst_updates,
+            price_change_from_buy=price_change,
+            score_change=score_change,
+            status=status,
+        )
+
+    def _determine_position_status(self, position: Position, evaluation: ThesisEvaluation) -> str:
+        """포지션 상태 결정"""
+        current = position.current_price or 0
+
+        # 목표가 도달
+        if position.target_price and current >= position.target_price:
+            return 'target_reached'
+
+        # 손절가 도달
+        if position.stop_loss and current <= position.stop_loss:
+            return 'stopped_out'
+
+        # 투자 논리 무효화 (점수가 매우 낮음)
+        if evaluation.score < -0.5:
+            return 'thesis_invalidated'
+
+        return 'active'
+
+    def _extract_key_observations(self, position: Position, evaluation: ThesisEvaluation) -> List[str]:
+        """핵심 관찰 사항 추출"""
+        observations = []
+        name = position.name or position.symbol
+
+        # 점수 기반 관찰
+        if evaluation.score > 0.3:
+            observations.append(f"✅ {name}의 투자 논리가 현재 데이터와 잘 부합합니다.")
+        elif evaluation.score < -0.3:
+            observations.append(f"⚠️ {name}의 투자 논리 재검토가 필요합니다.")
+
+        # 기술적 관찰
+        tech = evaluation.technical_check.get('indicators', {})
+        rsi = tech.get('rsi', 50)
+        if rsi > 70:
+            observations.append(f"📊 RSI {rsi:.0f}: 과매수 구간 - 단기 조정 가능성")
+        elif rsi < 30:
+            observations.append(f"📊 RSI {rsi:.0f}: 과매도 구간 - 반등 가능성")
+
+        return_3m = tech.get('return_3m', 0)
+        if return_3m > 30:
+            observations.append(f"🚀 3개월 +{return_3m:.0f}% 급등 - 모멘텀 강함")
+        elif return_3m < -20:
+            observations.append(f"📉 3개월 {return_3m:.0f}% 하락 - 하락 추세 주의")
+
+        # 펀더멘털 관찰
+        for item in evaluation.strengths[:2]:
+            observations.append(f"💪 {item}")
+
+        return observations[:5]  # 최대 5개
+
+    def _extract_risk_flags(self, evaluation: ThesisEvaluation, risk_assessment: Dict) -> List[str]:
+        """리스크 플래그 추출"""
+        flags = []
+
+        # 전체 리스크 수준
+        if risk_assessment.get('overall_risk') == 'high':
+            flags.append("🔴 전체 리스크 높음")
+
+        # 개별 리스크
+        for r in risk_assessment.get('risks', [])[:3]:
+            flags.append(f"⚠️ {r}")
+
+        # 약점에서 추가 플래그
+        for w in evaluation.weaknesses[:2]:
+            if w not in [f.replace('⚠️ ', '') for f in flags]:
+                flags.append(f"❌ {w}")
+
+        return flags[:5]
+
+    def _extract_catalyst_updates(self, position: Position, evaluation: ThesisEvaluation) -> List[str]:
+        """촉매 업데이트 추출"""
+        updates = []
+        thesis_desc = position.thesis_description or ''
+        thesis_lower = thesis_desc.lower()
+
+        # 기업 지식 기반 촉매 정보
+        company_info = self.COMPANY_KNOWLEDGE.get(position.symbol, {})
+        themes = company_info.get('themes', {})
+
+        for theme_key, theme_info in themes.items():
+            if theme_key.lower() in thesis_lower:
+                catalysts = theme_info.get('catalysts', [])
+                for c in catalysts:
+                    if isinstance(c, dict):
+                        conf = c.get('confidence', 0)
+                        if conf >= 70:
+                            updates.append(f"🎯 {c['catalyst']} (신뢰도 {conf}%)")
+                    else:
+                        updates.append(f"🎯 {c}")
+
+        if not updates:
+            updates.append("📋 분기 실적 발표 모니터링 필요")
+            updates.append("📋 산업 뉴스 및 경쟁사 동향 확인 필요")
+
+        return updates[:4]
+
+    def generate_ongoing_situation_report(
+        self, history: ThesisReportHistory, position: Position
+    ) -> str:
+        """축적된 데이터를 기반으로 대략적인 상황 보고서 생성"""
+        if not history.reports:
+            return "아직 축적된 보고서가 없습니다. 첫 평가를 실행해주세요."
+
+        summary = history.get_summary()
+        trend = history.get_trend(days=30)
+        latest = history.get_latest()
+
+        name = position.name or position.symbol
+
+        report = []
+        report.append(f"## 📊 {name} 잠재적 상황 보고서")
+        report.append(f"*{datetime.now().strftime('%Y-%m-%d %H:%M')} 기준*\n")
+
+        # 1. 전체 현황
+        report.append("### 📌 추적 현황")
+        report.append(f"- **추적 시작**: {summary.get('first_report', '-')[:10]}")
+        report.append(f"- **총 보고서**: {summary.get('total_reports', 0)}건")
+        report.append(f"- **추적 기간**: {summary.get('tracking_days', 0)}일")
+        report.append(f"- **현재 상태**: {self._status_to_korean(latest.status)}")
+        report.append("")
+
+        # 2. 수익률 현황
+        report.append("### 💰 수익률 현황")
+        price_change = latest.price_change_from_buy
+        emoji = "🟢" if price_change > 0 else ("🔴" if price_change < 0 else "⚪")
+        report.append(f"- **매수가 대비**: {emoji} {price_change:+.1f}%")
+        report.append(f"- **목표가 도달 확률**: {latest.target_probability:.0f}%")
+        report.append(f"- **리스크/리워드 비율**: 1:{latest.risk_reward_ratio:.1f}")
+        report.append("")
+
+        # 3. 투자 논리 점수 추이
+        report.append("### 📈 투자 논리 유효성 추이")
+        score_pct = (latest.score + 1) / 2 * 100
+        report.append(f"- **현재 점수**: {score_pct:.0f}/100 ({latest.rating})")
+        report.append(f"- **평균 점수**: {(summary.get('avg_score', 0) + 1) / 2 * 100:.0f}/100")
+
+        if trend.get('trend') == 'improving':
+            report.append(f"- **30일 추세**: 🟢 개선 중 (+{trend.get('score_change', 0) * 50:.1f}p)")
+        elif trend.get('trend') == 'declining':
+            report.append(f"- **30일 추세**: 🔴 악화 중 ({trend.get('score_change', 0) * 50:.1f}p)")
+        else:
+            report.append(f"- **30일 추세**: 🟡 안정적")
+        report.append("")
+
+        # 4. 리스크 요약
+        if latest.risk_flags:
+            report.append("### ⚠️ 현재 리스크 플래그")
+            for flag in latest.risk_flags[:4]:
+                report.append(f"- {flag}")
+            report.append("")
+
+        # 5. 주시할 촉매
+        if latest.catalyst_updates:
+            report.append("### 🎯 주시할 촉매")
+            for cat in latest.catalyst_updates[:3]:
+                report.append(f"- {cat}")
+            report.append("")
+
+        # 6. 핵심 관찰
+        if latest.key_observations:
+            report.append("### 💡 핵심 관찰")
+            for obs in latest.key_observations[:3]:
+                report.append(f"- {obs}")
+            report.append("")
+
+        # 7. 반복 리스크 (히스토리에서 추출)
+        recurring = trend.get('recurring_risks', [])
+        if len(recurring) >= 2:
+            report.append("### 🔄 반복적으로 관찰되는 리스크")
+            for risk in recurring[:3]:
+                report.append(f"- {risk}")
+            report.append("")
+
+        # 8. 결론
+        report.append("### 📝 종합 의견")
+        if latest.status == 'target_reached':
+            report.append("🎉 **목표가 도달** - 이익 실현 또는 목표가 상향 검토")
+        elif latest.status == 'stopped_out':
+            report.append("🛑 **손절가 도달** - 청산 또는 투자 논리 전면 재검토 필요")
+        elif latest.status == 'thesis_invalidated':
+            report.append("❌ **투자 논리 무효화** - 원래 매수 이유가 더 이상 유효하지 않음")
+        else:
+            if score_pct >= 60 and trend.get('trend') != 'declining':
+                report.append(f"✅ 투자 논리가 유효합니다. '{position.thesis_description}'에 대한 베팅을 유지하되, 리스크 관리를 철저히 하세요.")
+            elif score_pct >= 40:
+                report.append(f"🟡 투자 논리에 대한 모니터링을 강화하세요. 핵심 촉매 발생 여부가 중요합니다.")
+            else:
+                report.append(f"🔴 투자 논리 재검토가 필요합니다. 원래 매수 이유가 여전히 유효한지 다시 생각해보세요.")
+
+        return "\n".join(report)
+
+    def _status_to_korean(self, status: str) -> str:
+        """상태를 한국어로 변환"""
+        mapping = {
+            'active': '🟢 활성 (보유 중)',
+            'target_reached': '🎯 목표가 도달',
+            'stopped_out': '🛑 손절가 도달',
+            'thesis_invalidated': '❌ 논리 무효화',
+        }
+        return mapping.get(status, status)
+
+
+class ThesisReportManager:
+    """잠재적 보고서 저장/관리 매니저"""
+
+    def __init__(self, storage_path: str = None):
+        """초기화"""
+        if storage_path is None:
+            storage_path = os.path.join(os.path.dirname(__file__), 'report_history.json')
+        self.storage_path = storage_path
+        self.histories: Dict[str, ThesisReportHistory] = {}
+        self._load()
+
+    def _load(self):
+        """저장된 히스토리 로드"""
+        if os.path.exists(self.storage_path):
+            try:
+                with open(self.storage_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    for symbol, reports in data.items():
+                        history = ThesisReportHistory(symbol=symbol)
+                        for r in reports:
+                            history.reports.append(ThesisReport.from_dict(r))
+                        self.histories[symbol] = history
+            except Exception as e:
+                print(f"보고서 히스토리 로드 실패: {e}")
+
+    def _save(self):
+        """히스토리 저장"""
+        try:
+            data = {}
+            for symbol, history in self.histories.items():
+                data[symbol] = [r.to_dict() for r in history.reports]
+            with open(self.storage_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"보고서 히스토리 저장 실패: {e}")
+
+    def add_report(self, report: ThesisReport):
+        """보고서 추가"""
+        symbol = report.symbol
+        if symbol not in self.histories:
+            self.histories[symbol] = ThesisReportHistory(symbol=symbol)
+        self.histories[symbol].add_report(report)
+        self._save()
+
+    def get_history(self, symbol: str) -> Optional[ThesisReportHistory]:
+        """종목별 히스토리 조회"""
+        return self.histories.get(symbol)
+
+    def get_latest_report(self, symbol: str) -> Optional[ThesisReport]:
+        """최신 보고서 조회"""
+        history = self.get_history(symbol)
+        return history.get_latest() if history else None
+
+    def get_all_symbols(self) -> List[str]:
+        """추적 중인 모든 종목"""
+        return list(self.histories.keys())
+
+    def get_portfolio_summary(self) -> Dict:
+        """포트폴리오 전체 보고서 요약"""
+        if not self.histories:
+            return {'status': 'no_data'}
+
+        summaries = []
+        for symbol, history in self.histories.items():
+            summary = history.get_summary()
+            if summary.get('status') != 'no_data':
+                summaries.append(summary)
+
+        if not summaries:
+            return {'status': 'no_data'}
+
+        # 전체 통계
+        total_positions = len(summaries)
+        avg_score = np.mean([s['current_score'] for s in summaries])
+
+        # 상태별 분포
+        status_dist = {}
+        for s in summaries:
+            status = s['current_status']
+            status_dist[status] = status_dist.get(status, 0) + 1
+
+        # 가장 좋은/나쁜 포지션
+        sorted_summaries = sorted(summaries, key=lambda x: x['current_score'], reverse=True)
+
+        return {
+            'total_positions': total_positions,
+            'average_score': avg_score,
+            'status_distribution': status_dist,
+            'best_position': sorted_summaries[0] if sorted_summaries else None,
+            'worst_position': sorted_summaries[-1] if sorted_summaries else None,
+            'all_summaries': summaries,
         }

@@ -16,7 +16,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from portfolio.portfolio import Portfolio, Position, AssetType, InvestmentThesis
 from portfolio.analyzer import PortfolioAnalyzer
-from portfolio.thesis_evaluator import ThesisEvaluator, ThesisRating
+from portfolio.thesis_evaluator import (
+    ThesisEvaluator, ThesisRating, ThesisReport,
+    ThesisReportHistory, ThesisReportManager
+)
 
 # yfinance import (선택적)
 try:
@@ -527,7 +530,12 @@ def render_thesis_evaluation(portfolio: Portfolio):
         st.info("평가할 포지션이 없습니다.")
         return
 
+    # 세션 상태에 리포트 매니저 초기화
+    if 'report_manager' not in st.session_state:
+        st.session_state.report_manager = ThesisReportManager()
+
     evaluator = ThesisEvaluator()
+    report_manager = st.session_state.report_manager
 
     # 평가할 종목 선택
     symbols = [p.symbol for p in portfolio.positions]
@@ -546,11 +554,32 @@ def render_thesis_evaluation(portfolio: Portfolio):
     if position.stop_loss:
         st.write(f"🛑 손절가: ${position.stop_loss:.2f}")
 
+    # 기존 보고서 히스토리 확인
+    history = report_manager.get_history(selected_symbol)
+    if history and history.reports:
+        st.caption(f"📜 이 종목의 축적된 보고서: {len(history.reports)}건")
+
+    # 평가 및 보고서 생성 버튼
+    col1, col2 = st.columns(2)
+
+    with col1:
+        eval_btn = st.button("🔍 투자 논리 분석 실행", key="eval_btn", use_container_width=True)
+
+    with col2:
+        report_btn = st.button("📊 잠재적 보고서 생성 & 축적", key="report_btn", type="primary", use_container_width=True)
+
     # 평가 실행
-    if st.button("🔍 투자 논리 분석 실행", key="eval_btn"):
+    if eval_btn or report_btn:
         with st.spinner("분석 중..."):
             try:
                 evaluation = evaluator.evaluate(position)
+
+                # 보고서 생성 및 저장
+                if report_btn:
+                    previous = report_manager.get_latest_report(selected_symbol)
+                    new_report = evaluator.generate_potential_report(position, evaluation, previous)
+                    report_manager.add_report(new_report)
+                    st.success(f"✅ 잠재적 보고서가 생성되고 축적되었습니다! (총 {len(report_manager.get_history(selected_symbol).reports)}건)")
 
                 # 평가 등급 표시
                 st.markdown("---")
@@ -666,6 +695,130 @@ def render_thesis_evaluation(portfolio: Portfolio):
             except Exception as e:
                 st.error(f"분석 중 오류 발생: {e}")
                 st.info("실시간 데이터 조회가 불가능한 경우 샘플 분석 결과를 표시합니다.")
+
+
+def render_potential_reports(portfolio: Portfolio):
+    """잠재적 보고서 히스토리 및 상황 보고서"""
+    st.subheader("📜 잠재적 보고서 (축적된 리스크/리턴 분석)")
+
+    if not portfolio.positions:
+        st.info("포지션이 없습니다.")
+        return
+
+    # 세션 상태에 리포트 매니저 초기화
+    if 'report_manager' not in st.session_state:
+        st.session_state.report_manager = ThesisReportManager()
+
+    evaluator = ThesisEvaluator()
+    report_manager = st.session_state.report_manager
+
+    # 추적 중인 종목 확인
+    tracked_symbols = report_manager.get_all_symbols()
+    portfolio_symbols = [p.symbol for p in portfolio.positions]
+
+    # 전체 요약
+    if tracked_symbols:
+        st.markdown("### 📊 전체 추적 현황")
+        portfolio_summary = report_manager.get_portfolio_summary()
+
+        if portfolio_summary.get('status') != 'no_data':
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric("추적 중인 종목", f"{portfolio_summary.get('total_positions', 0)}개")
+
+            with col2:
+                avg_score = portfolio_summary.get('average_score', 0)
+                avg_pct = (avg_score + 1) / 2 * 100
+                st.metric("평균 논리 점수", f"{avg_pct:.0f}/100")
+
+            with col3:
+                status_dist = portfolio_summary.get('status_distribution', {})
+                active_count = status_dist.get('active', 0)
+                st.metric("활성 포지션", f"{active_count}개")
+
+            with col4:
+                best = portfolio_summary.get('best_position')
+                if best:
+                    st.metric("최고 점수", f"{best['symbol']}")
+
+        st.divider()
+
+    # 종목별 상세 보고서
+    st.markdown("### 📋 종목별 상황 보고서")
+
+    # 종목 선택
+    symbols_with_reports = [s for s in portfolio_symbols if s in tracked_symbols]
+    symbols_without_reports = [s for s in portfolio_symbols if s not in tracked_symbols]
+
+    if symbols_with_reports:
+        selected_symbol = st.selectbox(
+            "보고서 조회할 종목",
+            symbols_with_reports,
+            key="report_symbol_select"
+        )
+
+        position = portfolio.get_position(selected_symbol)
+        history = report_manager.get_history(selected_symbol)
+
+        if position and history and history.reports:
+            # 상황 보고서 생성
+            situation_report = evaluator.generate_ongoing_situation_report(history, position)
+            st.markdown(situation_report)
+
+            # 히스토리 차트
+            st.markdown("### 📈 점수 추이")
+            if len(history.reports) >= 2:
+                import plotly.graph_objects as go
+
+                dates = [r.timestamp for r in history.reports]
+                scores = [(r.score + 1) / 2 * 100 for r in history.reports]  # 0-100 스케일
+                prices = [r.price_at_report for r in history.reports]
+
+                fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+                fig.add_trace(
+                    go.Scatter(x=dates, y=scores, name="투자논리 점수", line=dict(color='blue')),
+                    secondary_y=False,
+                )
+
+                fig.add_trace(
+                    go.Scatter(x=dates, y=prices, name="가격", line=dict(color='orange', dash='dot')),
+                    secondary_y=True,
+                )
+
+                fig.update_layout(
+                    title=f"{selected_symbol} 추적 히스토리",
+                    height=350,
+                )
+                fig.update_yaxes(title_text="논리 점수 (0-100)", secondary_y=False)
+                fig.update_yaxes(title_text="가격", secondary_y=True)
+
+                st.plotly_chart(fig, use_container_width=True)
+
+            # 상세 히스토리 테이블
+            with st.expander("📜 보고서 히스토리 상세"):
+                history_data = []
+                for r in reversed(history.reports[-10:]):  # 최근 10개
+                    history_data.append({
+                        '날짜': r.timestamp.strftime('%Y-%m-%d %H:%M'),
+                        '상태': r.status,
+                        '점수': f"{(r.score + 1) / 2 * 100:.0f}",
+                        '등급': r.rating,
+                        '가격': f"${r.price_at_report:.2f}",
+                        '수익률': f"{r.price_change_from_buy:+.1f}%",
+                        '목표확률': f"{r.target_probability:.0f}%",
+                    })
+                st.dataframe(pd.DataFrame(history_data), use_container_width=True, hide_index=True)
+
+    # 아직 추적 안 되는 종목
+    if symbols_without_reports:
+        st.markdown("### ℹ️ 추적 시작이 필요한 종목")
+        st.caption(f"다음 종목들은 아직 보고서가 없습니다: {', '.join(symbols_without_reports)}")
+        st.info("💡 '투자논리 평가' 탭에서 '잠재적 보고서 생성 & 축적' 버튼을 눌러 추적을 시작하세요.")
+
+    if not tracked_symbols:
+        st.info("📝 아직 축적된 보고서가 없습니다. '투자논리 평가' 탭에서 보고서를 생성해주세요.")
 
 
 def render_risk_return_analysis(portfolio: Portfolio):
@@ -834,9 +987,10 @@ def render_portfolio_page():
     portfolio.update_weights()
 
     # 탭 구성
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 요약",
         "🎯 투자논리 평가",
+        "📜 잠재적 보고서",
         "📈 리스크/리턴",
         "💡 권고사항"
     ])
@@ -852,9 +1006,12 @@ def render_portfolio_page():
         render_thesis_evaluation(portfolio)
 
     with tab3:
-        render_risk_return_analysis(portfolio)
+        render_potential_reports(portfolio)
 
     with tab4:
+        render_risk_return_analysis(portfolio)
+
+    with tab5:
         render_portfolio_recommendations(portfolio)
 
 
