@@ -174,6 +174,21 @@ class ScenarioAnalyzer:
         },
     }
 
+    # 섹터 이름 한글 변환
+    SECTOR_NAME_KR = {
+        'technology': '기술',
+        'healthcare': '헬스케어',
+        'consumer_discretionary': '경기소비재',
+        'consumer_staples': '필수소비재',
+        'financials': '금융',
+        'industrials': '산업재',
+        'communication': '통신서비스',
+        'utilities': '유틸리티',
+        'energy': '에너지',
+        'materials': '소재',
+        'real_estate': '부동산',
+    }
+
     def __init__(self):
         """초기화"""
         self.scenarios: List[Scenario] = []
@@ -376,15 +391,15 @@ class ScenarioAnalyzer:
         # 점수 기반 분류
         sorted_sectors = sorted(sector_scores.items(), key=lambda x: x[1], reverse=True)
 
-        overweight = [s[0] for s in sorted_sectors if s[1] > 0.2]
-        underweight = [s[0] for s in sorted_sectors if s[1] < -0.2]
-        neutral = [s[0] for s in sorted_sectors if -0.2 <= s[1] <= 0.2]
+        overweight = [self.SECTOR_NAME_KR.get(s[0], s[0]) for s in sorted_sectors if s[1] > 0.2]
+        underweight = [self.SECTOR_NAME_KR.get(s[0], s[0]) for s in sorted_sectors if s[1] < -0.2]
+        neutral = [self.SECTOR_NAME_KR.get(s[0], s[0]) for s in sorted_sectors if -0.2 <= s[1] <= 0.2]
 
         return {
             'overweight': overweight,
             'neutral': neutral,
             'underweight': underweight,
-            'scores': dict(sorted_sectors),
+            'scores': {self.SECTOR_NAME_KR.get(k, k): v for k, v in sorted_sectors},
         }
 
     def sensitivity_analysis(self, scenarios: List[Scenario],
