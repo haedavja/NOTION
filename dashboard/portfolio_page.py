@@ -51,6 +51,88 @@ def format_currency(value, currency='USD', exchange_rate=None):
         return f"${value:,.0f}"
 
 
+def get_realtime_price(symbol: str):
+    """실시간 가격 조회 (단일 종목)"""
+    if not YFINANCE_AVAILABLE or not symbol:
+        return None
+
+    try:
+        ticker = yf.Ticker(symbol.strip().upper())
+        hist = ticker.history(period='1d')
+        if not hist.empty:
+            return float(hist['Close'].iloc[-1])
+        # 1일 데이터 없으면 5일로 재시도
+        hist = ticker.history(period='5d')
+        if not hist.empty:
+            return float(hist['Close'].iloc[-1])
+        return None
+    except Exception:
+        return None
+
+
+def get_batch_prices(symbols: list):
+    """여러 종목 가격 일괄 조회"""
+    if not YFINANCE_AVAILABLE or not symbols:
+        return {}
+
+    prices = {}
+    try:
+        # yfinance 일괄 조회
+        tickers_str = ' '.join([s.upper() for s in symbols])
+        data = yf.download(tickers_str, period='1d', progress=False, threads=True)
+
+        if data.empty:
+            # 개별 조회로 fallback
+            for sym in symbols:
+                price = get_realtime_price(sym)
+                if price:
+                    prices[sym.upper()] = price
+        else:
+            # 단일 종목인 경우
+            if len(symbols) == 1:
+                if 'Close' in data.columns:
+                    prices[symbols[0].upper()] = float(data['Close'].iloc[-1])
+            else:
+                # 여러 종목인 경우
+                if 'Close' in data.columns:
+                    for sym in symbols:
+                        sym_upper = sym.upper()
+                        try:
+                            if sym_upper in data['Close'].columns:
+                                val = data['Close'][sym_upper].iloc[-1]
+                                if pd.notna(val):
+                                    prices[sym_upper] = float(val)
+                        except Exception:
+                            pass
+    except Exception as e:
+        print(f"Batch price error: {e}")
+        # 개별 조회로 fallback
+        for sym in symbols:
+            price = get_realtime_price(sym)
+            if price:
+                prices[sym.upper()] = price
+
+    return prices
+
+
+def update_portfolio_prices(portfolio: Portfolio):
+    """포트폴리오 전체 종목 현재가 업데이트"""
+    if not portfolio.positions:
+        return 0
+
+    symbols = [p.symbol for p in portfolio.positions]
+    prices = get_batch_prices(symbols)
+
+    updated = 0
+    for position in portfolio.positions:
+        if position.symbol in prices:
+            position.current_price = prices[position.symbol]
+            updated += 1
+
+    portfolio.update_weights()
+    return updated
+
+
 def search_stock(symbol: str):
     """종목 검색 및 정보 조회"""
     if not YFINANCE_AVAILABLE:
@@ -114,8 +196,11 @@ def render_portfolio_input():
     if 'portfolio' not in st.session_state:
         st.session_state.portfolio = Portfolio(name="My Portfolio")
 
+    if 'last_price_update' not in st.session_state:
+        st.session_state.last_price_update = None
+
     # 설정 영역
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
+    col1, col2, col3, col4, col5 = st.columns([1, 1, 1.5, 1.5, 2])
     with col1:
         if st.button("📂 샘플 로드", key="load_sample_btn"):
             st.session_state.portfolio = create_sample_portfolio()
@@ -124,9 +209,25 @@ def render_portfolio_input():
     with col2:
         if st.button("🗑️ 초기화", key="reset_portfolio_btn"):
             st.session_state.portfolio = Portfolio(name="My Portfolio")
+            st.session_state.last_price_update = None
             st.rerun()
 
     with col3:
+        # 실시간 가격 업데이트 버튼
+        if st.button("🔄 실시간 가격", key="update_prices_btn", type="primary"):
+            if st.session_state.portfolio.positions:
+                with st.spinner("가격 조회 중..."):
+                    updated = update_portfolio_prices(st.session_state.portfolio)
+                    st.session_state.last_price_update = datetime.now()
+                    if updated > 0:
+                        st.success(f"✅ {updated}개 종목 가격 업데이트 완료!")
+                    else:
+                        st.warning("가격을 조회할 수 없습니다.")
+                    st.rerun()
+            else:
+                st.warning("포지션이 없습니다.")
+
+    with col4:
         currency_display = st.selectbox(
             "통화 표시",
             ["USD", "KRW", "BOTH"],
@@ -134,7 +235,7 @@ def render_portfolio_input():
             key="currency_display"
         )
 
-    with col4:
+    with col5:
         exchange_rate = st.number_input(
             "환율 (USD/KRW)",
             min_value=1000.0,
@@ -144,6 +245,10 @@ def render_portfolio_input():
             key="exchange_rate_input"
         )
         st.session_state.exchange_rate = exchange_rate
+
+    # 마지막 업데이트 시간 표시
+    if st.session_state.last_price_update:
+        st.caption(f"📡 마지막 가격 업데이트: {st.session_state.last_price_update.strftime('%Y-%m-%d %H:%M:%S')}")
 
     st.divider()
 
@@ -277,32 +382,33 @@ def render_positions_table(portfolio: Portfolio):
         target_pct = ((p.target_price / p.avg_cost - 1) * 100) if p.target_price and p.avg_cost > 0 else None
         stop_pct = ((1 - p.stop_loss / p.avg_cost) * 100) if p.stop_loss and p.avg_cost > 0 else None
 
+        # 손익률 계산
+        pnl_pct = p.unrealized_pnl_pct if p.unrealized_pnl_pct else 0
+        pnl_emoji = "🟢" if pnl_pct > 0 else ("🔴" if pnl_pct < 0 else "⚪")
+
         # 가격 포맷팅
         if currency == 'BOTH':
-            avg_cost_str = f"${p.avg_cost:.2f} (₩{p.avg_cost * exchange_rate:,.0f})"
-            current_str = f"${p.current_price:.2f} (₩{p.current_price * exchange_rate:,.0f})" if p.current_price else "-"
-            market_val_str = f"${p.market_value:,.0f} (₩{p.market_value * exchange_rate:,.0f})" if p.market_value else "-"
-            pnl_str = f"${p.unrealized_pnl:,.0f} (₩{p.unrealized_pnl * exchange_rate:,.0f})" if p.unrealized_pnl else "-"
+            avg_cost_str = f"${p.avg_cost:.2f}"
+            current_str = f"${p.current_price:.2f}" if p.current_price else "-"
+            pnl_str = f"${p.unrealized_pnl:+,.0f}" if p.unrealized_pnl else "-"
         elif currency == 'KRW':
             avg_cost_str = f"₩{p.avg_cost * exchange_rate:,.0f}"
             current_str = f"₩{p.current_price * exchange_rate:,.0f}" if p.current_price else "-"
-            market_val_str = f"₩{p.market_value * exchange_rate:,.0f}" if p.market_value else "-"
-            pnl_str = f"₩{p.unrealized_pnl * exchange_rate:,.0f}" if p.unrealized_pnl else "-"
+            pnl_str = f"₩{p.unrealized_pnl * exchange_rate:+,.0f}" if p.unrealized_pnl else "-"
         else:
             avg_cost_str = f"${p.avg_cost:.2f}"
             current_str = f"${p.current_price:.2f}" if p.current_price else "-"
-            market_val_str = f"${p.market_value:,.0f}" if p.market_value else "-"
-            pnl_str = f"${p.unrealized_pnl:,.0f}" if p.unrealized_pnl else "-"
+            pnl_str = f"${p.unrealized_pnl:+,.0f}" if p.unrealized_pnl else "-"
 
         data.append({
+            '': pnl_emoji,
             '티커': p.symbol,
-            '종목명': p.name,
-            '수량': p.quantity,
-            '평균단가': avg_cost_str,
+            '종목명': p.name[:10] + '..' if len(p.name) > 12 else p.name,
+            '수량': f"{p.quantity:.0f}",
+            '매수가': avg_cost_str,
             '현재가': current_str,
-            '평가금액': market_val_str,
             '손익': pnl_str,
-            '손익률': f"{p.unrealized_pnl_pct:+.2f}%" if p.unrealized_pnl_pct else "-",
+            '수익률': f"{pnl_pct:+.1f}%",
             '목표': f"+{target_pct:.0f}%" if target_pct else "-",
             '손절': f"-{stop_pct:.0f}%" if stop_pct else "-",
             '비중': f"{p.weight:.1f}%" if p.weight else "-",
