@@ -56,51 +56,111 @@ def get_market_keywords():
 
 
 def render_market_keywords():
-    """시장 키워드 UI 렌더링"""
-    st.subheader("🔥 실시간 시장 키워드")
+    """시장 키워드 UI - 태그 클라우드 스타일"""
+    st.subheader("🔥 시장 키워드")
 
     keywords = get_market_keywords()
 
-    # 핫 테마
-    st.markdown("#### 🎯 핫 테마")
-    cols = st.columns(5)
-    for i, theme in enumerate(keywords['핫 테마']):
-        with cols[i % 5]:
-            heat = theme['heat']
-            if heat >= 90:
-                color = '#ff4444'
-            elif heat >= 70:
-                color = '#ffaa00'
-            else:
-                color = '#44aa44'
+    # 모든 키워드를 하나로 통합 (heat 기준 정렬)
+    all_keywords = []
 
-            st.markdown(f"""
-            <div style="background:{color}22;border-left:4px solid {color};padding:10px;border-radius:5px;margin-bottom:10px;">
-                <b>{theme['keyword']}</b> {theme['trend']}<br>
-                <small>🔥 {heat}%</small><br>
-                <small style="color:gray;">{', '.join(theme['related'][:2])}</small>
-            </div>
-            """, unsafe_allow_html=True)
+    # 핫 테마
+    for t in keywords['핫 테마']:
+        all_keywords.append({
+            'text': t['keyword'],
+            'heat': t['heat'],
+            'type': 'theme',
+            'trend': t['trend'],
+            'tooltip': f"관련주: {', '.join(t['related'])}"
+        })
 
     # 정책/이슈
-    st.markdown("#### 📋 정책 & 이슈")
-    for item in keywords['정책/이슈'][:3]:
-        impact_color = {'호재': '🟢', '악재': '🔴', '중립': '🟡', '주의': '🟠'}.get(item['impact'], '⚪')
-        st.markdown(f"- **{item['keyword']}** {impact_color} - {item['desc']} (관심도 {item['heat']}%)")
+    for p in keywords['정책/이슈']:
+        color_map = {'호재': '#22c55e', '악재': '#ef4444', '중립': '#eab308', '주의': '#f97316'}
+        all_keywords.append({
+            'text': p['keyword'],
+            'heat': p['heat'],
+            'type': 'policy',
+            'color': color_map.get(p['impact'], '#888'),
+            'tooltip': p['desc']
+        })
 
-    # 섹터 모멘텀 & 글로벌
-    col1, col2 = st.columns(2)
+    # 섹터
+    for s in keywords['섹터 모멘텀']:
+        mom_heat = {'강세': 80, '중립': 50, '약세': 30}.get(s['momentum'], 50)
+        all_keywords.append({
+            'text': s['sector'],
+            'heat': mom_heat,
+            'type': 'sector',
+            'trend': {'강세': '↑', '중립': '→', '약세': '↓'}.get(s['momentum'], ''),
+            'tooltip': s['reason']
+        })
 
-    with col1:
-        st.markdown("#### 📊 섹터 모멘텀")
-        for s in keywords['섹터 모멘텀']:
-            mom_icon = {'강세': '🔺', '약세': '🔻', '중립': '➖'}.get(s['momentum'], '➖')
-            st.markdown(f"- {s['sector']} {mom_icon} - {s['reason']}")
+    # 글로벌
+    for g in keywords['글로벌 이슈']:
+        all_keywords.append({
+            'text': g['keyword'],
+            'heat': 60,
+            'type': 'global',
+            'tooltip': f"{g['status']} - {g['impact']}"
+        })
 
-    with col2:
-        st.markdown("#### 🌍 글로벌 이슈")
-        for g in keywords['글로벌 이슈']:
-            st.markdown(f"- **{g['keyword']}**: {g['status']}")
+    # 태그 클라우드 HTML 생성
+    tags_html = '<div style="line-height:2.5;text-align:center;">'
+
+    for kw in sorted(all_keywords, key=lambda x: -x['heat']):
+        heat = kw['heat']
+        # 글자 크기: heat에 따라 1.0em ~ 2.5em
+        font_size = 1.0 + (heat / 100) * 1.5
+
+        # 색상
+        if kw['type'] == 'policy' and 'color' in kw:
+            color = kw['color']
+        elif heat >= 90:
+            color = '#ef4444'  # 빨강
+        elif heat >= 70:
+            color = '#f97316'  # 주황
+        elif heat >= 50:
+            color = '#3b82f6'  # 파랑
+        else:
+            color = '#6b7280'  # 회색
+
+        # 트렌드 화살표
+        trend = kw.get('trend', '')
+
+        # 타입별 배경
+        bg_opacity = '15' if kw['type'] == 'theme' else '10'
+
+        tags_html += f'''
+        <span title="{kw['tooltip']}" style="
+            display:inline-block;
+            font-size:{font_size:.1f}em;
+            font-weight:{'bold' if heat >= 70 else 'normal'};
+            color:{color};
+            background:{color}{bg_opacity};
+            padding:4px 12px;
+            margin:4px;
+            border-radius:20px;
+            cursor:help;
+            transition:transform 0.2s;
+        " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"
+        >{kw['text']}{trend}</span>
+        '''
+
+    tags_html += '</div>'
+
+    st.markdown(tags_html, unsafe_allow_html=True)
+
+    # 범례
+    st.markdown("""
+    <div style="text-align:center;margin-top:10px;font-size:0.8em;color:#888;">
+        <span style="color:#ef4444;">●</span> 핫(90%+) &nbsp;
+        <span style="color:#f97316;">●</span> 상승(70%+) &nbsp;
+        <span style="color:#3b82f6;">●</span> 관심(50%+) &nbsp;
+        <span style="color:#6b7280;">●</span> 보통 &nbsp;
+        | 글자 크기 = 관심도
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def create_candlestick_chart(df: pd.DataFrame, title: str):
