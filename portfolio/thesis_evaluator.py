@@ -479,6 +479,168 @@ class ThesisEvaluator:
             'stop_probability': stop_probability * 100,
         }
 
+    def _generate_detailed_recommendations(
+        self, position: Position, fundamentals: Dict, price_data: pd.DataFrame,
+        fundamental_check: Dict, technical_check: Dict, risk_assessment: Dict,
+        overall_score: float, keyword_analysis: Dict
+    ) -> List[str]:
+        """투자 논리 유형과 데이터 기반의 구체적 권고사항 생성"""
+        recommendations = []
+        thesis_type = position.thesis_type
+        thesis_desc = position.thesis_description.lower() if position.thesis_description else ""
+
+        # === 1. 종합 평가 ===
+        if overall_score > 0.3:
+            recommendations.append(f"✅ 종합 평가: {position.symbol}의 투자 논리가 현재 펀더멘털/기술적 지표와 강하게 부합합니다.")
+        elif overall_score > 0:
+            recommendations.append(f"⚠️ 종합 평가: {position.symbol}의 투자 논리가 일부 유효하나, 아래 세부 사항을 점검하세요.")
+        elif overall_score > -0.3:
+            recommendations.append(f"❌ 종합 평가: {position.symbol}의 투자 논리 재검토 필요. 매수 근거가 약해지고 있습니다.")
+        else:
+            recommendations.append(f"🚨 종합 평가: {position.symbol}의 투자 논리가 현재 상황과 불일치. 포지션 축소/청산 검토하세요.")
+
+        # === 2. 투자 논리 유형별 구체적 비평 ===
+        if thesis_type == InvestmentThesis.GROWTH:
+            revenue_growth = fundamentals.get('revenue_growth', 0)
+            earnings_growth = fundamentals.get('earnings_growth', 0)
+            pe = fundamentals.get('forward_pe', 0)
+
+            if revenue_growth and earnings_growth:
+                if revenue_growth > 20 and earnings_growth > 20:
+                    recommendations.append(f"📈 성장주 분석: 매출 {revenue_growth:.1f}%, 이익 {earnings_growth:.1f}% 성장 - 성장 논리 유효")
+                elif revenue_growth > 0 and earnings_growth < 0:
+                    recommendations.append(f"⚠️ 성장주 경고: 매출은 {revenue_growth:.1f}% 성장하나 이익은 {earnings_growth:.1f}% 역성장. 수익성 악화 우려")
+                elif revenue_growth < 10:
+                    recommendations.append(f"❌ 성장주 문제: 매출 성장률 {revenue_growth:.1f}%로 성장주 프리미엄 정당화 어려움")
+
+            if pe and pe > 30:
+                recommendations.append(f"💰 밸류에이션: Forward PER {pe:.1f}x로 고평가. 성장 둔화 시 주가 급락 위험")
+            elif pe and pe > 0:
+                peg = pe / earnings_growth if earnings_growth > 0 else float('inf')
+                if peg < 1:
+                    recommendations.append(f"💰 밸류에이션: PEG {peg:.2f}로 양호. 성장 대비 적정 가격")
+                elif peg < 2:
+                    recommendations.append(f"💰 밸류에이션: PEG {peg:.2f}로 보통. 추가 상승 여력 제한적")
+
+        elif thesis_type == InvestmentThesis.VALUE:
+            pe = fundamentals.get('pe_ratio')
+            pb = fundamentals.get('pb_ratio')
+            roe = fundamentals.get('roe', 0)
+
+            if pe and pb:
+                if pe < 10 and pb < 1:
+                    recommendations.append(f"✅ 가치주 분석: PER {pe:.1f}x, PBR {pb:.2f}x로 심한 저평가. 촉매 필요")
+                elif pe < 15:
+                    recommendations.append(f"📊 가치주 분석: PER {pe:.1f}x로 저평가 구간. 시장 재평가 대기")
+                else:
+                    recommendations.append(f"⚠️ 가치주 경고: PER {pe:.1f}x로 가치주 기준 높음. 저평가 논리 약화")
+
+            if roe:
+                if roe > 15:
+                    recommendations.append(f"📈 수익성: ROE {roe:.1f}%로 우량. 저평가 + 고수익 = 좋은 가치주")
+                elif roe < 5:
+                    recommendations.append(f"❌ 수익성: ROE {roe:.1f}%로 낮음. 저평가에는 이유가 있을 수 있음 (가치 함정)")
+
+        elif thesis_type == InvestmentThesis.DIVIDEND:
+            div_yield = fundamentals.get('dividend_yield', 0)
+            payout = fundamentals.get('payout_ratio', 0)
+            earnings_growth = fundamentals.get('earnings_growth', 0)
+
+            if div_yield:
+                if div_yield > 4:
+                    recommendations.append(f"✅ 배당주 분석: 배당 수익률 {div_yield:.2f}%로 우수. 배당 지속성 확인 필요")
+                elif div_yield > 2:
+                    recommendations.append(f"📊 배당주 분석: 배당 수익률 {div_yield:.2f}%로 적정")
+                else:
+                    recommendations.append(f"⚠️ 배당주 경고: 배당 수익률 {div_yield:.2f}%로 배당주 논리 약함")
+
+            if payout and payout > 80:
+                recommendations.append(f"⚠️ 배당 지속성: 배당 성향 {payout:.1f}%로 너무 높음. 배당 삭감 위험")
+
+            if earnings_growth and earnings_growth < 0:
+                recommendations.append(f"❌ 배당 위험: 이익 {earnings_growth:.1f}% 역성장. 향후 배당 삭감 가능성")
+
+        elif thesis_type == InvestmentThesis.MOMENTUM:
+            indicators = technical_check.get('indicators', {})
+            return_1m = indicators.get('return_1m', 0)
+            return_3m = indicators.get('return_3m', 0)
+            rsi = indicators.get('rsi', 50)
+
+            if return_1m > 10 and return_3m > 20:
+                recommendations.append(f"✅ 모멘텀 분석: 1개월 {return_1m:.1f}%, 3개월 {return_3m:.1f}% 수익률로 강한 모멘텀")
+            elif return_1m < 0 and return_3m > 0:
+                recommendations.append(f"⚠️ 모멘텀 경고: 최근 1개월 {return_1m:.1f}% 하락. 모멘텀 둔화 신호")
+            elif return_1m < 0 and return_3m < 0:
+                recommendations.append(f"❌ 모멘텀 붕괴: 1개월 {return_1m:.1f}%, 3개월 {return_3m:.1f}%. 모멘텀 전략 무효화")
+
+            if rsi > 70:
+                recommendations.append(f"⚠️ RSI {rsi:.1f}: 과매수 구간. 단기 조정 가능성")
+            elif rsi < 30:
+                recommendations.append(f"📊 RSI {rsi:.1f}: 과매도 구간. 반등 가능성")
+
+        elif thesis_type == InvestmentThesis.TECHNICAL:
+            indicators = technical_check.get('indicators', {})
+            from_high = indicators.get('from_52w_high', 0)
+
+            for item in technical_check.get('passed', []):
+                recommendations.append(f"✅ 기술적: {item}")
+            for item in technical_check.get('failed', []):
+                recommendations.append(f"❌ 기술적: {item}")
+
+            if from_high and from_high < -20:
+                recommendations.append(f"📉 52주 고점 대비 {from_high:.1f}% 하락. 지지선 확인 필요")
+
+        # === 3. 사용자 입력 투자 논리 분석 ===
+        if thesis_desc:
+            recommendations.append(f"📝 입력된 논리: \"{position.thesis_description}\"")
+
+            # AI/성장 관련 키워드
+            if any(kw in thesis_desc for kw in ['ai', '인공지능', 'ai 성장', 'ai성장']):
+                revenue_growth = fundamentals.get('revenue_growth', 0)
+                if revenue_growth and revenue_growth > 30:
+                    recommendations.append("✅ AI 성장 논리: 매출 30%+ 성장으로 AI 수혜 확인")
+                else:
+                    recommendations.append("⚠️ AI 성장 논리: 실제 실적에서 AI 수혜가 아직 뚜렷하지 않음. 기대감 선반영 주의")
+
+            # 턴어라운드 관련
+            if any(kw in thesis_desc for kw in ['턴어라운드', '실적개선', '흑자전환']):
+                earnings_growth = fundamentals.get('earnings_growth', 0)
+                if earnings_growth and earnings_growth > 50:
+                    recommendations.append("✅ 턴어라운드: 이익 급증으로 턴어라운드 진행 중")
+                elif earnings_growth and earnings_growth < 0:
+                    recommendations.append("❌ 턴어라운드 미실현: 이익 여전히 역성장. 턴어라운드 논리 재검토")
+
+            # 저평가 관련
+            if any(kw in thesis_desc for kw in ['저평가', '싸다', '할인']):
+                pe = fundamentals.get('pe_ratio')
+                if pe and pe < 12:
+                    recommendations.append(f"✅ 저평가 논리: PER {pe:.1f}x로 저평가 맞음")
+                elif pe and pe > 20:
+                    recommendations.append(f"❌ 저평가 논리 무효: PER {pe:.1f}x로 저평가 아님")
+
+        # === 4. 가격 위치 분석 ===
+        if position.current_price and position.avg_cost:
+            pnl_pct = (position.current_price / position.avg_cost - 1) * 100
+            if pnl_pct > 20:
+                recommendations.append(f"💰 현재 +{pnl_pct:.1f}% 수익 중. 일부 차익실현 또는 손절가 상향 검토")
+            elif pnl_pct < -15:
+                recommendations.append(f"💸 현재 {pnl_pct:.1f}% 손실 중. 투자 논리가 여전히 유효한지 재점검 필요")
+
+        # === 5. 목표가/손절가 분석 ===
+        if position.target_price and position.current_price:
+            upside = (position.target_price / position.current_price - 1) * 100
+            if upside < 5:
+                recommendations.append(f"🎯 목표가까지 {upside:.1f}%만 남음. 출구 전략 준비")
+            elif upside > 50:
+                recommendations.append(f"🎯 목표가까지 {upside:.1f}%. 장기 보유 의지 필요")
+
+        if position.stop_loss and position.current_price:
+            downside = (position.stop_loss / position.current_price - 1) * 100
+            if downside > -5:
+                recommendations.append(f"🛑 손절가까지 {abs(downside):.1f}%만 남음. 리스크 관리 주의")
+
+        return recommendations
+
     def evaluate(self, position: Position, macro_data: Optional[Dict] = None) -> ThesisEvaluation:
         """종합 평가 실행"""
         # 데이터 수집
@@ -527,18 +689,15 @@ class ThesisEvaluator:
         weaknesses = fundamental_check['failed'] + technical_check['failed'] + risk_assessment['risks']
         warnings = fundamental_check['warnings'] + technical_check['warnings']
 
-        recommendations = []
-        if overall_score > 0.3:
-            recommendations.append("투자 논리가 현재 데이터와 잘 부합합니다. 보유 유지 권장.")
-        elif overall_score > 0:
-            recommendations.append("투자 논리가 어느 정도 유효합니다. 모니터링 필요.")
-        elif overall_score > -0.3:
-            recommendations.append("투자 논리에 대한 재검토가 필요합니다.")
-        else:
-            recommendations.append("투자 논리가 현재 상황과 맞지 않습니다. 포지션 축소 검토.")
+        # 구체적 권고사항 생성
+        recommendations = self._generate_detailed_recommendations(
+            position, fundamentals, price_data,
+            fundamental_check, technical_check, risk_assessment,
+            overall_score, keyword_analysis
+        )
 
         if risk_assessment['overall_risk'] == 'high':
-            recommendations.append("리스크가 높습니다. 손절가 준수 및 비중 조절 고려.")
+            recommendations.append("⚠️ 전체 리스크 높음: 손절가 준수 필수, 비중 축소 고려")
 
         if warnings:
             recommendations.extend([f"주의: {w}" for w in warnings[:2]])
