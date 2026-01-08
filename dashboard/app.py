@@ -32,6 +32,25 @@ from portfolio.portfolio import Portfolio, Position, create_sample_portfolio
 from portfolio.analyzer import PortfolioAnalyzer
 from portfolio.thesis_evaluator import ThesisEvaluator, ThesisRating
 
+# 새로운 모듈들 (선택적 import)
+try:
+    from dashboard.backtest_page import render_backtest_page
+    BACKTEST_AVAILABLE = True
+except ImportError:
+    BACKTEST_AVAILABLE = False
+
+try:
+    from dashboard.ai_analysis_page import render_ai_analysis_page
+    AI_ANALYSIS_AVAILABLE = True
+except ImportError:
+    AI_ANALYSIS_AVAILABLE = False
+
+try:
+    from dashboard.korea_page import render_korea_page
+    KOREA_AVAILABLE = True
+except ImportError:
+    KOREA_AVAILABLE = False
+
 
 # 페이지 설정
 st.set_page_config(
@@ -328,15 +347,20 @@ def main():
     # 구분선
     st.divider()
 
-    # 탭 구성
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    # 탭 구성 (동적으로 탭 추가)
+    tab_names = [
         "🎯 종합 예측",
         "🌐 거시경제",
         "💹 자금흐름",
         "📰 센티먼트",
         "📊 기술적 분석",
-        "💼 포트폴리오 분석"
-    ])
+        "💼 포트폴리오 분석",
+        "📈 백테스트",
+        "🤖 AI 분석",
+        "🇰🇷 한국 주식"
+    ]
+    tabs = st.tabs(tab_names)
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = tabs
 
     # ========== 탭 1: 종합 예측 ==========
     with tab1:
@@ -599,6 +623,39 @@ def main():
     with tab6:
         from dashboard.portfolio_page import render_portfolio_page
         render_portfolio_page()
+
+    # ========== 탭 7: 백테스트 ==========
+    with tab7:
+        if BACKTEST_AVAILABLE:
+            render_backtest_page()
+        else:
+            st.warning("백테스트 모듈을 사용할 수 없습니다.")
+            st.info("backtest 패키지가 올바르게 설치되었는지 확인하세요.")
+
+    # ========== 탭 8: AI 분석 ==========
+    with tab8:
+        if AI_ANALYSIS_AVAILABLE:
+            render_ai_analysis_page()
+        else:
+            st.warning("AI 분석 모듈을 사용할 수 없습니다.")
+            st.info("ai_analysis 패키지가 올바르게 설치되었는지 확인하세요.")
+            st.markdown("""
+            **필요한 패키지:**
+            - openai (GPT API용)
+            - feedparser (뉴스 수집용)
+            """)
+
+    # ========== 탭 9: 한국 주식 ==========
+    with tab9:
+        if KOREA_AVAILABLE:
+            render_korea_page()
+        else:
+            st.warning("한국 주식 모듈을 사용할 수 없습니다.")
+            st.info("korea 패키지가 올바르게 설치되었는지 확인하세요.")
+            st.markdown("""
+            **필요한 패키지:**
+            - pykrx (KRX 데이터용)
+            """)
 
     # 푸터
     st.divider()
