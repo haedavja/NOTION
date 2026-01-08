@@ -53,29 +53,56 @@ def format_currency(value, currency='USD', exchange_rate=None):
 
 def search_stock(symbol: str):
     """종목 검색 및 정보 조회"""
-    if not YFINANCE_AVAILABLE or not symbol:
+    if not YFINANCE_AVAILABLE:
         return None
 
+    if not symbol or not symbol.strip():
+        return None
+
+    symbol = symbol.strip().upper()
+
     try:
-        ticker = yf.Ticker(symbol.upper())
-        info = ticker.info
+        ticker = yf.Ticker(symbol)
+
+        # 가격 히스토리 먼저 조회 (더 안정적)
         hist = ticker.history(period='5d')
 
         if hist.empty:
-            return None
+            # 다시 시도 (1개월)
+            hist = ticker.history(period='1mo')
+            if hist.empty:
+                return None
 
-        current_price = hist['Close'].iloc[-1]
+        current_price = float(hist['Close'].iloc[-1])
+
+        # 종목 정보 조회
+        try:
+            info = ticker.info
+            name = info.get('longName') or info.get('shortName') or symbol
+            sector = info.get('sector', '')
+            industry = info.get('industry', '')
+            currency = info.get('currency', 'USD')
+            market_cap = info.get('marketCap')
+        except Exception:
+            # info 조회 실패해도 가격은 있으면 반환
+            name = symbol
+            sector = ''
+            industry = ''
+            currency = 'USD'
+            market_cap = None
 
         return {
-            'symbol': symbol.upper(),
-            'name': info.get('longName') or info.get('shortName') or symbol.upper(),
+            'symbol': symbol,
+            'name': name,
             'current_price': round(current_price, 2),
-            'currency': info.get('currency', 'USD'),
-            'sector': info.get('sector', ''),
-            'industry': info.get('industry', ''),
-            'market_cap': info.get('marketCap'),
+            'currency': currency,
+            'sector': sector,
+            'industry': industry,
+            'market_cap': market_cap,
         }
     except Exception as e:
+        # 디버깅용 (운영에서는 제거)
+        print(f"search_stock error for {symbol}: {e}")
         return None
 
 
@@ -90,16 +117,21 @@ def render_portfolio_input():
     if 'stock_info' not in st.session_state:
         st.session_state.stock_info = None
 
+    # yfinance 상태 표시
+    if not YFINANCE_AVAILABLE:
+        st.warning("⚠️ yfinance가 설치되지 않아 종목 검색이 불가능합니다. `pip install yfinance`로 설치하세요.")
+
     # 설정 영역
     col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
     with col1:
-        if st.button("샘플 포트폴리오 로드"):
+        if st.button("샘플 포트폴리오 로드", key="load_sample_btn"):
             st.session_state.portfolio = create_sample_portfolio()
             st.rerun()
 
     with col2:
-        if st.button("포트폴리오 초기화"):
+        if st.button("포트폴리오 초기화", key="reset_portfolio_btn"):
             st.session_state.portfolio = Portfolio(name="My Portfolio")
+            st.session_state.stock_info = None
             st.rerun()
 
     with col3:
@@ -125,31 +157,41 @@ def render_portfolio_input():
 
     # 새 포지션 추가 폼
     with st.expander("➕ 새 포지션 추가", expanded=True):
-        # 종목 검색
-        col1, col2 = st.columns([2, 3])
+        # 종목 검색 (폼 외부)
+        st.markdown("##### 🔍 종목 검색")
+        search_col1, search_col2 = st.columns([3, 1])
 
-        with col1:
+        with search_col1:
             search_symbol = st.text_input(
-                "🔍 종목 검색 (티커 입력 후 Enter)",
-                placeholder="예: AAPL, MSFT, 005930.KS",
-                key="search_symbol"
+                "티커 심볼 입력",
+                placeholder="예: AAPL, MSFT, GOOGL, 005930.KS",
+                key="search_symbol",
+                label_visibility="collapsed"
             )
 
-        with col2:
-            if search_symbol and st.button("종목 검색", key="search_btn"):
-                with st.spinner("검색 중..."):
+        with search_col2:
+            search_clicked = st.button("🔍 검색", key="search_btn", use_container_width=True)
+
+        # 검색 실행
+        if search_clicked:
+            if not search_symbol:
+                st.warning("티커 심볼을 입력하세요.")
+            elif not YFINANCE_AVAILABLE:
+                st.error("yfinance가 설치되지 않았습니다.")
+            else:
+                with st.spinner(f"{search_symbol.upper()} 검색 중..."):
                     info = search_stock(search_symbol)
                     if info:
                         st.session_state.stock_info = info
-                        st.success(f"✅ {info['name']} ({info['symbol']}) - 현재가: ${info['current_price']:,.2f}")
+                        st.rerun()  # 폼 기본값 업데이트를 위해 리런
                     else:
-                        st.error("종목을 찾을 수 없습니다.")
+                        st.error(f"'{search_symbol}' 종목을 찾을 수 없습니다. 티커를 확인하세요.")
                         st.session_state.stock_info = None
 
         # 검색된 종목 정보 표시
         stock_info = st.session_state.stock_info
         if stock_info:
-            st.info(f"**{stock_info['name']}** | 현재가: ${stock_info['current_price']:,.2f} | 섹터: {stock_info.get('sector', 'N/A')}")
+            st.success(f"✅ **{stock_info['name']}** ({stock_info['symbol']}) | 현재가: ${stock_info['current_price']:,.2f} | 섹터: {stock_info.get('sector', 'N/A') or '정보없음'}")
 
         st.markdown("---")
 
@@ -334,8 +376,8 @@ def render_positions_table(portfolio: Portfolio):
     # 삭제 버튼
     with st.expander("포지션 삭제"):
         symbols = [p.symbol for p in portfolio.positions]
-        symbol_to_delete = st.selectbox("삭제할 종목", symbols)
-        if st.button("삭제"):
+        symbol_to_delete = st.selectbox("삭제할 종목", symbols, key="delete_symbol_select")
+        if st.button("삭제", key="delete_position_btn"):
             portfolio.remove_position(symbol_to_delete)
             st.success(f"{symbol_to_delete} 삭제됨")
             st.rerun()
