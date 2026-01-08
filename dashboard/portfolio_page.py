@@ -23,9 +23,9 @@ def render_portfolio_input():
     """포트폴리오 입력 UI"""
     st.subheader("📝 포트폴리오 입력")
 
-    # 세션 상태 초기화
+    # 세션 상태 초기화 (빈 포트폴리오로 시작)
     if 'portfolio' not in st.session_state:
-        st.session_state.portfolio = create_sample_portfolio()
+        st.session_state.portfolio = Portfolio(name="My Portfolio")
 
     # 샘플 로드 버튼
     col1, col2 = st.columns([1, 4])
