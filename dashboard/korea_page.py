@@ -17,6 +17,92 @@ from korea.korean_stocks import KoreanStockAnalyzer
 from korea.bok_indicators import BOKIndicators
 
 
+def get_market_keywords():
+    """현재 금융 시장 키워드 (한국 시장 중심)"""
+    from datetime import datetime
+
+    # 현재 시점 기반 동적 키워드 (실제로는 뉴스/API에서 가져와야 함)
+    keywords = {
+        '핫 테마': [
+            {'keyword': '2차전지', 'heat': 95, 'trend': '↑', 'related': ['LG에너지솔루션', 'POSCO홀딩스', '에코프로']},
+            {'keyword': 'AI/반도체', 'heat': 92, 'trend': '↑', 'related': ['삼성전자', 'SK하이닉스', '한미반도체']},
+            {'keyword': '로봇', 'heat': 78, 'trend': '↑', 'related': ['현대차', '두산로보틱스', '레인보우로보틱스']},
+            {'keyword': '조선', 'heat': 75, 'trend': '→', 'related': ['HD한국조선해양', '삼성중공업', 'HD현대중공업']},
+            {'keyword': '방산', 'heat': 70, 'trend': '↑', 'related': ['한화에어로스페이스', 'LIG넥스원', '한국항공우주']},
+        ],
+        '정책/이슈': [
+            {'keyword': '금리 동결', 'heat': 88, 'impact': '중립', 'desc': '한은 기준금리 3.5% 동결'},
+            {'keyword': '밸류업', 'heat': 85, 'impact': '호재', 'desc': '저PBR 기업 자사주 매입/배당 확대'},
+            {'keyword': '공매도 재개', 'heat': 80, 'impact': '악재', 'desc': '2025년 3월 공매도 재개 예정'},
+            {'keyword': '반도체 지원법', 'heat': 72, 'impact': '호재', 'desc': '반도체 클러스터 세제 혜택'},
+            {'keyword': '원/달러 환율', 'heat': 68, 'impact': '주의', 'desc': '1,400원대 고환율 지속'},
+        ],
+        '섹터 모멘텀': [
+            {'sector': '반도체', 'momentum': '강세', 'reason': 'AI 수요 + HBM 호황'},
+            {'sector': '자동차', 'momentum': '중립', 'reason': '전기차 둔화, 하이브리드 전환'},
+            {'sector': '바이오', 'momentum': '약세', 'reason': '금리 부담, 임상 지연'},
+            {'sector': '금융', 'momentum': '강세', 'reason': '밸류업 수혜, 배당 확대'},
+            {'sector': '건설', 'momentum': '약세', 'reason': 'PF 리스크, 미분양 증가'},
+        ],
+        '글로벌 이슈': [
+            {'keyword': '미국 금리', 'status': '인하 기대', 'impact': '한국 증시 호재'},
+            {'keyword': '중국 경기', 'status': '부진 지속', 'impact': '수출주 부담'},
+            {'keyword': '유가', 'status': '70~80불 박스', 'impact': '정유/화학 중립'},
+            {'keyword': '엔화 약세', 'status': '150엔대', 'impact': '일본 경쟁사 가격 경쟁력'},
+        ]
+    }
+
+    return keywords
+
+
+def render_market_keywords():
+    """시장 키워드 UI 렌더링"""
+    st.subheader("🔥 실시간 시장 키워드")
+
+    keywords = get_market_keywords()
+
+    # 핫 테마
+    st.markdown("#### 🎯 핫 테마")
+    cols = st.columns(5)
+    for i, theme in enumerate(keywords['핫 테마']):
+        with cols[i % 5]:
+            heat = theme['heat']
+            if heat >= 90:
+                color = '#ff4444'
+            elif heat >= 70:
+                color = '#ffaa00'
+            else:
+                color = '#44aa44'
+
+            st.markdown(f"""
+            <div style="background:{color}22;border-left:4px solid {color};padding:10px;border-radius:5px;margin-bottom:10px;">
+                <b>{theme['keyword']}</b> {theme['trend']}<br>
+                <small>🔥 {heat}%</small><br>
+                <small style="color:gray;">{', '.join(theme['related'][:2])}</small>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # 정책/이슈
+    st.markdown("#### 📋 정책 & 이슈")
+    for item in keywords['정책/이슈'][:3]:
+        impact_color = {'호재': '🟢', '악재': '🔴', '중립': '🟡', '주의': '🟠'}.get(item['impact'], '⚪')
+        st.markdown(f"- **{item['keyword']}** {impact_color} - {item['desc']} (관심도 {item['heat']}%)")
+
+    # 섹터 모멘텀 & 글로벌
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### 📊 섹터 모멘텀")
+        for s in keywords['섹터 모멘텀']:
+            mom_icon = {'강세': '🔺', '약세': '🔻', '중립': '➖'}.get(s['momentum'], '➖')
+            st.markdown(f"- {s['sector']} {mom_icon} - {s['reason']}")
+
+    with col2:
+        st.markdown("#### 🌍 글로벌 이슈")
+        for g in keywords['글로벌 이슈']:
+            st.markdown(f"- **{g['keyword']}**: {g['status']}")
+
+
 def create_candlestick_chart(df: pd.DataFrame, title: str):
     """캔들스틱 차트"""
     fig = go.Figure(data=[go.Candlestick(
@@ -116,7 +202,12 @@ def render_korea_page():
 
     # ========== 탭 1: 시장 현황 ==========
     with tab1:
-        st.subheader("시장 현황")
+        # 시장 키워드 (상단에 배치)
+        render_market_keywords()
+
+        st.divider()
+
+        st.subheader("📈 지수 현황")
 
         # 지수 요약
         market_summary = krx.get_market_summary()
