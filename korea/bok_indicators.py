@@ -154,11 +154,11 @@ class BOKIndicators:
         dates = pd.date_range(end=datetime.now(), periods=12, freq='M')
 
         base_values = {
-            'base_rate': 3.5,
-            'cpi': 102.5,
-            'usd_krw': 1320,
-            'unemployment_rate': 2.8,
-            'leading_index': 100.5,
+            'base_rate': 3.0,
+            'cpi': 104.5,
+            'usd_krw': 1450,  # 2025년 1월 기준 환율
+            'unemployment_rate': 3.0,
+            'leading_index': 100.2,
         }
 
         base = base_values.get(indicator_name, 100)
@@ -184,12 +184,12 @@ class BOKIndicators:
             if df is not None and not df.empty:
                 rates[key] = df['value'].iloc[-1]
             else:
-                # 샘플 데이터
+                # 샘플 데이터 (2025년 1월 기준)
                 sample_rates = {
-                    'usd_krw': 1320,
-                    'eur_krw': 1450,
-                    'jpy_krw': 8.9,
-                    'cny_krw': 185,
+                    'usd_krw': 1450,
+                    'eur_krw': 1510,
+                    'jpy_krw': 9.3,
+                    'cny_krw': 199,
                 }
                 rates[key] = sample_rates.get(key, 0)
 
@@ -242,14 +242,14 @@ class BOKIndicators:
                     trend=trend,
                 )
             else:
-                # 샘플 데이터
+                # 샘플 데이터 (2025년 1월 기준)
                 sample_values = {
-                    'base_rate': 3.5,
-                    'cpi': 102.8,
-                    'usd_krw': 1320,
-                    'unemployment_rate': 2.8,
-                    'leading_index': 100.5,
-                    'trade_balance': 4500,
+                    'base_rate': 3.0,
+                    'cpi': 104.5,
+                    'usd_krw': 1450,
+                    'unemployment_rate': 3.0,
+                    'leading_index': 100.2,
+                    'trade_balance': 3500,
                 }
                 summary[name] = EconomicIndicator(
                     name=self.indicator_codes[name][2],
