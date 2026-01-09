@@ -218,50 +218,39 @@ class KRXDataCollector:
         return self._get_fallback_stock_list(market)
 
     def _fetch_all_stocks_from_krx(self) -> List[Dict]:
-        """KRX에서 전체 종목 조회 (배치 최적화)"""
+        """KRX에서 전체 종목 조회 (get_market_ticker_list 사용)"""
         today = datetime.now().strftime('%Y%m%d')
         data = []
 
-        # KOSPI - 시가총액 데이터로 한 번에 조회 (종목명 포함)
+        # KOSPI - ticker list 직접 조회 (더 안정적)
         try:
-            kospi_cap = stock.get_market_cap_by_ticker(today, market='KOSPI')
-            if not kospi_cap.empty:
-                for ticker in kospi_cap.index:
+            kospi_tickers = stock.get_market_ticker_list(today, market='KOSPI')
+            for ticker in kospi_tickers:
+                try:
                     name = stock.get_market_ticker_name(ticker)
                     if name:
                         data.append({'code': ticker, 'name': name, 'market': 'KOSPI'})
+                except Exception:
+                    continue
+            logger.info(f"KOSPI {len([d for d in data if d['market']=='KOSPI'])}개 종목 조회")
         except Exception as e:
             logger.warning(f"KOSPI 종목 조회 실패: {e}")
-            # Fallback to individual queries
-            try:
-                kospi_tickers = stock.get_market_ticker_list(today, market='KOSPI')
-                for ticker in kospi_tickers[:100]:  # 실패 시 상위 100개만
-                    name = stock.get_market_ticker_name(ticker)
-                    if name:
-                        data.append({'code': ticker, 'name': name, 'market': 'KOSPI'})
-            except Exception:
-                pass
 
         # KOSDAQ - 동일한 방식
         try:
-            kosdaq_cap = stock.get_market_cap_by_ticker(today, market='KOSDAQ')
-            if not kosdaq_cap.empty:
-                for ticker in kosdaq_cap.index:
+            kosdaq_tickers = stock.get_market_ticker_list(today, market='KOSDAQ')
+            for ticker in kosdaq_tickers:
+                try:
                     name = stock.get_market_ticker_name(ticker)
                     if name:
                         data.append({'code': ticker, 'name': name, 'market': 'KOSDAQ'})
+                except Exception:
+                    continue
+            logger.info(f"KOSDAQ {len([d for d in data if d['market']=='KOSDAQ'])}개 종목 조회")
         except Exception as e:
             logger.warning(f"KOSDAQ 종목 조회 실패: {e}")
-            try:
-                kosdaq_tickers = stock.get_market_ticker_list(today, market='KOSDAQ')
-                for ticker in kosdaq_tickers[:100]:
-                    name = stock.get_market_ticker_name(ticker)
-                    if name:
-                        data.append({'code': ticker, 'name': name, 'market': 'KOSDAQ'})
-            except Exception:
-                pass
 
-        logger.info(f"KRX에서 {len(data)}개 종목 조회 완료")
+        logger.info(f"KRX에서 총 {len(data)}개 종목 조회 완료")
         return data
 
     def _load_stock_cache(self) -> Optional[List[Dict]]:
