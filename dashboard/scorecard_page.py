@@ -32,9 +32,88 @@ try:
 except ImportError:
     YFINANCE_AVAILABLE = False
 
+# KRX 데이터 (한국 주식 수급 데이터용)
+try:
+    from korea.krx_data import get_investor_trading_by_stock, KRXDataCollector
+    KRX_AVAILABLE = True
+except ImportError:
+    KRX_AVAILABLE = False
+
+
+def fetch_korean_stock_data(code: str) -> dict:
+    """한국 주식 데이터 조회 (KRX)"""
+    if not KRX_AVAILABLE:
+        return {}
+
+    try:
+        collector = KRXDataCollector()
+
+        # 종목 정보
+        stock_info = collector.get_stock_by_code(code)
+        if not stock_info:
+            return {}
+
+        # 주가 데이터
+        price_df = collector.get_stock_price(code)
+        if price_df.empty:
+            return {}
+
+        # 기본 정보
+        data = {
+            'name': stock_info.get('name', code),
+            'sector': stock_info.get('market', 'Unknown'),
+            'industry': 'Korean Stock',
+            'current_price': price_df['Close'].iloc[-1] if not price_df.empty else 0,
+            'market': 'KRX',
+        }
+
+        # 기술적 데이터
+        if len(price_df) >= 50:
+            close = price_df['Close']
+            ma20 = close.rolling(20).mean().iloc[-1]
+            ma50 = close.rolling(50).mean().iloc[-1]
+
+            # RSI 계산
+            delta = close.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+
+            data['technical'] = {
+                'rsi': rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50,
+                'ma20': ma20,
+                'ma50': ma50,
+                'trend': '상승' if close.iloc[-1] > ma50 else '하락',
+                'ma_signal': '골든크로스' if ma20 > ma50 else '데드크로스',
+            }
+        else:
+            data['technical'] = {'rsi': 50, 'trend': '중립', 'ma_signal': ''}
+
+        # 펀더멘털은 KRX에서 제공 안함 - 기본값
+        data['fundamentals'] = {
+            'per': None,
+            'pbr': None,
+            'roe': None,
+            'dividend_yield': 0,
+            'debt_ratio': 100,
+            'revenue_growth': 0,
+        }
+
+        return data
+
+    except Exception as e:
+        st.warning(f"한국 주식 데이터 조회 오류: {e}")
+        return {}
+
 
 def fetch_stock_data(symbol: str) -> dict:
-    """주식 데이터 조회"""
+    """주식 데이터 조회 (한국/해외 자동 구분)"""
+    # 한국 주식인 경우 (6자리 숫자)
+    if is_korean_stock(symbol):
+        return fetch_korean_stock_data(symbol)
+
+    # 해외 주식 (yfinance)
     if not YFINANCE_AVAILABLE:
         return {}
 
@@ -52,6 +131,7 @@ def fetch_stock_data(symbol: str) -> dict:
             'sector': info.get('sector', 'Unknown'),
             'industry': info.get('industry', 'Unknown'),
             'current_price': hist['Close'].iloc[-1] if not hist.empty else 0,
+            'market': 'US',
         }
 
         # 펀더멘털 데이터
@@ -106,6 +186,65 @@ def calculate_snowflake_from_fundamentals(fundamentals: dict) -> object:
         return None
 
 
+def is_korean_stock(symbol: str) -> bool:
+    """한국 주식 여부 확인 (6자리 숫자 코드)"""
+    return symbol.isdigit() and len(symbol) == 6
+
+
+def fetch_supply_demand_data(symbol: str, days: int = 5) -> dict:
+    """
+    수급 데이터 조회 (한국 주식은 실제 데이터, 해외 주식은 추정)
+
+    Args:
+        symbol: 종목 코드
+        days: 조회 기간
+
+    Returns:
+        수급 데이터 dict {'foreign_net', 'inst_net', 'trend', 'data_source'}
+    """
+    # 한국 주식인 경우 실제 KRX 데이터 사용
+    if is_korean_stock(symbol) and KRX_AVAILABLE:
+        try:
+            investor_data = get_investor_trading_by_stock(symbol, days)
+
+            foreign_net = investor_data.get('foreign_net', 0)
+            inst_net = investor_data.get('inst_net', 0)
+
+            # 수급 추세 판단
+            if foreign_net > 0 and inst_net > 0:
+                trend = '매집'  # 외국인+기관 동반 매수
+            elif foreign_net < 0 and inst_net < 0:
+                trend = '이탈'  # 외국인+기관 동반 매도
+            elif foreign_net > 0 or inst_net > 0:
+                trend = '중립'  # 엇갈림
+            else:
+                trend = '중립'
+
+            # 금액을 정규화 (억원 단위로 변환 후 -100~100 스케일)
+            # 외국인 순매수가 ±500억 이상이면 최대치
+            foreign_normalized = max(-100, min(100, foreign_net / 5_000_000_000))
+            inst_normalized = max(-100, min(100, inst_net / 3_000_000_000))
+
+            return {
+                'foreign_net': foreign_normalized,
+                'inst_net': inst_normalized,
+                'trend': trend,
+                'data_source': 'KRX 실제 데이터',
+                'raw_foreign': foreign_net,
+                'raw_inst': inst_net,
+            }
+        except Exception as e:
+            st.warning(f"수급 데이터 조회 실패: {e}")
+
+    # 해외 주식 또는 KRX 미사용 시 기술적 분석 기반 추정
+    return {
+        'foreign_net': 0,
+        'inst_net': 0,
+        'trend': '중립',
+        'data_source': '추정치 (해외 주식)',
+    }
+
+
 class MockPotentialAnalysis:
     """잠재 요인 분석 모의 객체"""
     def __init__(self, bullish: float = 50, bearish: float = 50):
@@ -139,13 +278,20 @@ def render_scorecard_page():
     with col1:
         symbol = st.text_input(
             "종목 코드",
-            value="AAPL",
-            placeholder="예: AAPL, MSFT, GOOGL",
-            help="분석할 종목의 티커 심볼을 입력하세요"
+            value="005930",
+            placeholder="한국: 005930 (삼성전자) / 해외: AAPL",
+            help="한국 주식은 6자리 코드, 해외 주식은 티커 심볼 입력"
         )
 
     with col2:
         analyze_btn = st.button("📊 분석 실행", use_container_width=True)
+
+    # 데이터 소스 안내
+    if symbol:
+        if is_korean_stock(symbol):
+            st.caption("🇰🇷 한국 주식 - KRX 데이터 및 실시간 수급 정보 제공")
+        else:
+            st.caption("🌍 해외 주식 - yfinance 데이터 사용")
 
     # 분석 실행
     if analyze_btn and symbol:
@@ -170,12 +316,8 @@ def render_scorecard_page():
             # 기술적 데이터
             technical_data = stock_data.get('technical', {})
 
-            # 수급 데이터 (모의 - 실제 연결 시 교체)
-            supply_demand_data = {
-                'foreign_net': np.random.randint(-100, 100),
-                'inst_net': np.random.randint(-50, 50),
-                'trend': np.random.choice(['매집', '중립', '이탈']),
-            }
+            # 수급 데이터 (한국 주식은 실제 KRX 데이터 사용)
+            supply_demand_data = fetch_supply_demand_data(symbol.upper())
 
             # 잠재 요인 (기술적 분석 기반으로 추정)
             rsi = technical_data.get('rsi', 50)
@@ -233,13 +375,17 @@ def render_scorecard_page():
 
         # 추가 정보
         with st.expander("📈 상세 정보"):
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
 
             with col1:
                 st.markdown("### 기본 정보")
                 st.write(f"**섹터**: {stock_data.get('sector', 'N/A')}")
                 st.write(f"**산업**: {stock_data.get('industry', 'N/A')}")
-                st.write(f"**현재가**: ${stock_data.get('current_price', 0):,.2f}")
+                # 한국 주식은 원화, 해외는 달러
+                if stock_data.get('market') == 'KRX':
+                    st.write(f"**현재가**: ₩{stock_data.get('current_price', 0):,.0f}")
+                else:
+                    st.write(f"**현재가**: ${stock_data.get('current_price', 0):,.2f}")
 
             with col2:
                 st.markdown("### 펀더멘털")
@@ -247,6 +393,17 @@ def render_scorecard_page():
                 st.write(f"**PER**: {fund.get('per', 'N/A'):.2f}" if fund.get('per') else "**PER**: N/A")
                 st.write(f"**PBR**: {fund.get('pbr', 'N/A'):.2f}" if fund.get('pbr') else "**PBR**: N/A")
                 st.write(f"**ROE**: {fund.get('roe', 'N/A'):.1f}%" if fund.get('roe') else "**ROE**: N/A")
+
+            with col3:
+                st.markdown("### 수급 정보")
+                st.write(f"**데이터 소스**: {supply_demand_data.get('data_source', 'N/A')}")
+                st.write(f"**수급 추세**: {supply_demand_data.get('trend', 'N/A')}")
+                # 한국 주식은 실제 금액 표시
+                if 'raw_foreign' in supply_demand_data:
+                    raw_foreign = supply_demand_data['raw_foreign']
+                    raw_inst = supply_demand_data['raw_inst']
+                    st.write(f"**외국인**: {raw_foreign/100_000_000:+,.0f}억")
+                    st.write(f"**기관**: {raw_inst/100_000_000:+,.0f}억")
 
         # 카테고리별 점수 상세
         with st.expander("📊 카테고리별 점수 상세"):

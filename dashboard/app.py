@@ -137,6 +137,24 @@ try:
 except ImportError:
     SCORECARD_AVAILABLE = False
 
+try:
+    from dashboard.benchmark_page import render_benchmark_page
+    BENCHMARK_AVAILABLE = True
+except ImportError:
+    BENCHMARK_AVAILABLE = False
+
+try:
+    from dashboard.correlation_page import render_correlation_page
+    CORRELATION_AVAILABLE = True
+except ImportError:
+    CORRELATION_AVAILABLE = False
+
+try:
+    from dashboard.sector_rotation_page import render_sector_rotation_page
+    SECTOR_ROTATION_AVAILABLE = True
+except ImportError:
+    SECTOR_ROTATION_AVAILABLE = False
+
 # yfinance
 try:
     import yfinance as yf
@@ -676,6 +694,7 @@ def main():
         'fund_flow': True,
         'sentiment': True,
         'technical': True,
+        'sector_rotation': SECTOR_ROTATION_AVAILABLE,
         'korea': KOREA_AVAILABLE,
         'snowflake': SNOWFLAKE_AVAILABLE,
         'scorecard': SCORECARD_AVAILABLE,
@@ -683,6 +702,8 @@ def main():
         'potential': POTENTIAL_ANALYZER_AVAILABLE,
         'portfolio': True,
         'backtest': BACKTEST_AVAILABLE,
+        'benchmark': BENCHMARK_AVAILABLE,
+        'correlation': CORRELATION_AVAILABLE,
         'tools': TOOLS_AVAILABLE,
         'calendar': CALENDAR_AVAILABLE,
         'advanced': ADVANCED_AVAILABLE,
@@ -807,6 +828,24 @@ def main():
             render_backtest_page()
         else:
             render_unavailable_page("백테스트")
+
+    elif current_page == 'benchmark':
+        if BENCHMARK_AVAILABLE:
+            render_benchmark_page()
+        else:
+            render_unavailable_page("벤치마크 비교")
+
+    elif current_page == 'correlation':
+        if CORRELATION_AVAILABLE:
+            render_correlation_page()
+        else:
+            render_unavailable_page("상관관계 분석")
+
+    elif current_page == 'sector_rotation':
+        if SECTOR_ROTATION_AVAILABLE:
+            render_sector_rotation_page()
+        else:
+            render_unavailable_page("섹터 회전 분석")
 
     # 도구 카테고리
     elif current_page == 'tools':

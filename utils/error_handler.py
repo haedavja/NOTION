@@ -311,3 +311,214 @@ def format_error_for_ui(error: Exception) -> str:
         return f"❌ 오류: {error.message}"
     else:
         return f"❌ 오류가 발생했습니다: {str(error)}"
+
+
+class StreamlitErrorHandler:
+    """Streamlit 전용 에러 핸들러"""
+
+    def __init__(self):
+        self._error_count = 0
+        self._last_errors = []
+        self._max_errors = 10
+
+    def show_error(self, error: Exception, show_details: bool = False) -> None:
+        """Streamlit에 에러 표시"""
+        try:
+            import streamlit as st
+
+            message = format_error_for_ui(error)
+            st.error(message)
+
+            if show_details and isinstance(error, AppError):
+                with st.expander("상세 정보"):
+                    st.json(error.to_dict())
+
+            # 에러 기록
+            self._record_error(error)
+
+        except ImportError:
+            # Streamlit 없으면 로그만
+            log_error(error)
+
+    def show_warning(self, message: str) -> None:
+        """경고 표시"""
+        try:
+            import streamlit as st
+            st.warning(f"⚠️ {message}")
+        except ImportError:
+            logger.warning(message)
+
+    def show_info(self, message: str) -> None:
+        """정보 표시"""
+        try:
+            import streamlit as st
+            st.info(f"ℹ️ {message}")
+        except ImportError:
+            logger.info(message)
+
+    def _record_error(self, error: Exception) -> None:
+        """에러 기록"""
+        self._error_count += 1
+        self._last_errors.append({
+            'error': str(error),
+            'type': type(error).__name__,
+            'timestamp': datetime.now()
+        })
+        if len(self._last_errors) > self._max_errors:
+            self._last_errors.pop(0)
+
+    def get_error_stats(self) -> dict:
+        """에러 통계"""
+        return {
+            'total_errors': self._error_count,
+            'recent_errors': len(self._last_errors),
+            'last_errors': self._last_errors[-5:]
+        }
+
+
+class GracefulExecution:
+    """
+    컨텍스트 매니저: 안전한 코드 실행
+
+    Usage:
+        with GracefulExecution("데이터 로드", default_value=[]):
+            data = load_data()
+            process(data)
+    """
+
+    def __init__(
+        self,
+        operation_name: str,
+        default_value: Any = None,
+        show_error: bool = True,
+        log_error: bool = True
+    ):
+        self.operation_name = operation_name
+        self.default_value = default_value
+        self.show_error = show_error
+        self.log_error = log_error
+        self.error = None
+        self.success = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            self.success = False
+            self.error = exc_val
+
+            if self.log_error:
+                log_error(
+                    exc_val,
+                    context={'operation': self.operation_name}
+                )
+
+            if self.show_error:
+                try:
+                    import streamlit as st
+                    st.error(f"❌ {self.operation_name} 중 오류가 발생했습니다: {exc_val}")
+                except ImportError:
+                    pass
+
+            # 예외 억제
+            return True
+
+        return False
+
+
+def streamlit_safe(
+    operation_name: str = "작업",
+    default_value: Any = None,
+    show_spinner: bool = True
+):
+    """
+    Streamlit 안전 실행 데코레이터
+
+    Args:
+        operation_name: 작업 이름 (에러 메시지에 표시)
+        default_value: 에러 시 반환할 기본값
+        show_spinner: 스피너 표시 여부
+    """
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                import streamlit as st
+
+                if show_spinner:
+                    with st.spinner(f"{operation_name} 중..."):
+                        return func(*args, **kwargs)
+                else:
+                    return func(*args, **kwargs)
+
+            except Exception as e:
+                log_error(e, context={'operation': operation_name})
+
+                try:
+                    import streamlit as st
+                    st.error(f"❌ {operation_name} 실패: {e}")
+                except ImportError:
+                    pass
+
+                if callable(default_value):
+                    return default_value()
+                return default_value
+
+        return wrapper
+    return decorator
+
+
+def validate_input(
+    value: Any,
+    name: str,
+    validator: Callable[[Any], bool],
+    error_message: str = None
+) -> Any:
+    """
+    입력값 검증
+
+    Args:
+        value: 검증할 값
+        name: 필드명
+        validator: 검증 함수 (True/False 반환)
+        error_message: 커스텀 에러 메시지
+
+    Returns:
+        검증된 값
+
+    Raises:
+        ValidationError: 검증 실패 시
+    """
+    if not validator(value):
+        msg = error_message or f"'{name}' 값이 유효하지 않습니다: {value}"
+        raise ValidationError(msg, context={'field': name, 'value': str(value)[:100]})
+    return value
+
+
+def require_not_empty(value: Any, name: str) -> Any:
+    """값이 비어있지 않은지 검증"""
+    if value is None or (hasattr(value, '__len__') and len(value) == 0):
+        raise ValidationError(f"'{name}' 값이 필요합니다.", context={'field': name})
+    return value
+
+
+def require_positive(value: float, name: str) -> float:
+    """양수인지 검증"""
+    if value is None or value <= 0:
+        raise ValidationError(f"'{name}'은(는) 양수여야 합니다.", context={'field': name, 'value': value})
+    return value
+
+
+def require_in_range(value: float, name: str, min_val: float, max_val: float) -> float:
+    """범위 내 값인지 검증"""
+    if value is None or not (min_val <= value <= max_val):
+        raise ValidationError(
+            f"'{name}'은(는) {min_val}~{max_val} 범위여야 합니다.",
+            context={'field': name, 'value': value, 'range': (min_val, max_val)}
+        )
+    return value
+
+
+# 전역 Streamlit 에러 핸들러 인스턴스
+st_error_handler = StreamlitErrorHandler()

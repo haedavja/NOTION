@@ -49,6 +49,7 @@ MENU_STRUCTURE: Dict[MenuCategory, Dict] = {
             MenuItem("fund_flow", "자금흐름", "💹", MenuCategory.MARKET, "섹터별 자금 이동"),
             MenuItem("sentiment", "센티먼트", "📰", MenuCategory.MARKET, "뉴스 및 심리 분석"),
             MenuItem("technical", "기술적 분석", "📊", MenuCategory.MARKET, "차트 패턴, 지표"),
+            MenuItem("sector_rotation", "섹터 회전", "🔄", MenuCategory.MARKET, "섹터별 순환 분석"),
         ]
     },
     MenuCategory.STOCK: {
@@ -68,6 +69,8 @@ MENU_STRUCTURE: Dict[MenuCategory, Dict] = {
         "items": [
             MenuItem("portfolio", "포트폴리오 분석", "💼", MenuCategory.PORTFOLIO, "보유 종목 분석"),
             MenuItem("backtest", "백테스트", "📈", MenuCategory.PORTFOLIO, "전략 검증"),
+            MenuItem("benchmark", "벤치마크 비교", "📊", MenuCategory.PORTFOLIO, "지수 대비 성과"),
+            MenuItem("correlation", "상관관계 분석", "🔗", MenuCategory.PORTFOLIO, "종목간 상관관계"),
         ]
     },
     MenuCategory.TOOLS: {
