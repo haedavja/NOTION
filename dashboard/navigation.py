@@ -110,10 +110,16 @@ def init_navigation_state():
 
 def toggle_favorite(item_id: str):
     """즐겨찾기 토글"""
-    if item_id in st.session_state.favorites:
-        st.session_state.favorites.remove(item_id)
+    # session_state 리스트 직접 수정 대신 복사본 사용
+    if not isinstance(st.session_state.favorites, list):
+        st.session_state.favorites = []
+
+    favorites = st.session_state.favorites.copy()
+    if item_id in favorites:
+        favorites.remove(item_id)
     else:
-        st.session_state.favorites.append(item_id)
+        favorites.append(item_id)
+    st.session_state.favorites = favorites
 
 
 def get_menu_item(item_id: str) -> Optional[MenuItem]:
@@ -271,68 +277,6 @@ def render_onboarding():
             st.rerun()
 
         st.divider()
-
-
-def render_quick_summary(market_data: dict = None, prediction: dict = None):
-    """퀵 요약 대시보드"""
-    st.subheader("📊 핵심 지표 요약")
-
-    # 상단 메트릭 카드
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        prob = prediction.get('probability', 0.5) * 100 if prediction else 50
-        st.metric(
-            "상승 확률",
-            f"{prob:.1f}%",
-            delta=f"{prob - 50:.1f}%p" if prob != 50 else None
-        )
-
-    with col2:
-        if market_data and 'vix' in market_data:
-            vix = market_data['vix'].iloc[-1] if hasattr(market_data['vix'], 'iloc') else 20
-            st.metric("VIX", f"{vix:.1f}", delta=None)
-        else:
-            st.metric("VIX", "N/A")
-
-    with col3:
-        if market_data and 'sp500' in market_data:
-            sp500 = market_data['sp500']
-            if hasattr(sp500, 'iloc') and len(sp500) > 1:
-                current = sp500.iloc[-1]
-                prev = sp500.iloc[-2]
-                change = ((current - prev) / prev) * 100
-                st.metric("S&P 500", f"{current:,.0f}", delta=f"{change:.2f}%")
-            else:
-                st.metric("S&P 500", "N/A")
-        else:
-            st.metric("S&P 500", "N/A")
-
-    with col4:
-        direction = prediction.get('direction', 'neutral') if prediction else 'neutral'
-        direction_kr = {'bullish': '📈 상승', 'bearish': '📉 하락', 'neutral': '➡️ 중립'}
-        st.metric("시장 방향", direction_kr.get(direction, '➡️ 중립'))
-
-    # 빠른 링크
-    st.markdown("### 🔗 빠른 이동")
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        if st.button("🔥 급등 종목", use_container_width=True):
-            st.session_state.current_page = 'rally'
-            st.rerun()
-    with col2:
-        if st.button("🇰🇷 한국 주식", use_container_width=True):
-            st.session_state.current_page = 'korea'
-            st.rerun()
-    with col3:
-        if st.button("🤖 AI 분석", use_container_width=True):
-            st.session_state.current_page = 'ai_analysis'
-            st.rerun()
-    with col4:
-        if st.button("📅 캘린더", use_container_width=True):
-            st.session_state.current_page = 'calendar'
-            st.rerun()
 
 
 def get_page_title(page_id: str) -> str:

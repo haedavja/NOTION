@@ -35,7 +35,7 @@ from portfolio.thesis_evaluator import ThesisEvaluator, ThesisRating
 # 네비게이션 모듈
 from dashboard.navigation import (
     init_navigation_state, render_sidebar, render_onboarding,
-    render_quick_summary, get_page_title, MENU_STRUCTURE
+    get_page_title, MENU_STRUCTURE
 )
 
 # ==================== 모듈 가용성 체크 ====================
@@ -766,8 +766,11 @@ def main():
 
     # 포트폴리오 카테고리
     elif current_page == 'portfolio':
-        from dashboard.portfolio_page import render_portfolio_page
-        render_portfolio_page()
+        try:
+            from dashboard.portfolio_page import render_portfolio_page
+            render_portfolio_page()
+        except ImportError:
+            render_unavailable_page("포트폴리오 분석")
 
     elif current_page == 'backtest':
         if BACKTEST_AVAILABLE:
