@@ -469,36 +469,32 @@ def render_sns_discussion_compact(metrics: dict, condition: dict, gainers: list,
         st.rerun()
 
 
-def render_snowflake_compact():
-    """메인 대시보드용 Snowflake 분석 컴팩트 버전 - 전체 종목 지원"""
-    st.markdown("### ❄️ 종목 Snowflake 분석")
-    st.caption("한국 전체 종목 검색 가능 (2,400+ 종목) - 1글자 입력 시 자동완성")
+def render_integrated_stock_analysis():
+    """통합 종목 분석 - Snowflake + 트레이더 토론 + 투자논리 검증"""
 
-    # 새로운 자동완성 검색 컴포넌트 사용
+    # 자동완성 검색 컴포넌트
     try:
         from components.stock_search import render_stock_autocomplete
 
         selected = render_stock_autocomplete(
-            key="snowflake_main",
-            label="🔍 종목 검색",
+            key="main_stock_search",
+            label="🔍 종목 검색 (2,400+ 종목)",
             placeholder="종목명 또는 코드 (예: 삼성, 다날, 005930)",
             show_popular=True,
-            default_code=st.session_state.get('snowflake_selected_code'),
-            default_name=st.session_state.get('snowflake_selected_name')
+            default_code=st.session_state.get('main_selected_code'),
+            default_name=st.session_state.get('main_selected_name')
         )
 
         if selected:
-            st.session_state.snowflake_selected_code = selected['code']
-            st.session_state.snowflake_selected_name = selected['name']
+            st.session_state.main_selected_code = selected['code']
+            st.session_state.main_selected_name = selected['name']
 
     except ImportError:
-        # 폴백: 기존 방식
         search_input = st.text_input(
             "🔍 종목 검색",
             placeholder="종목명 또는 코드 입력",
-            key="main_snowflake_search"
+            key="fallback_search"
         )
-
         if search_input and KOREA_AVAILABLE:
             try:
                 krx = KRXDataCollector()
@@ -507,58 +503,112 @@ def render_snowflake_compact():
                     mask = (stock_list['name'].str.contains(search_input, case=False, na=False) |
                             stock_list['code'].str.contains(search_input, na=False))
                     matches = stock_list[mask].head(5)
-
                     if not matches.empty:
                         cols = st.columns(len(matches))
                         for i, (_, row) in enumerate(matches.iterrows()):
                             with cols[i]:
                                 if st.button(row['name'][:6], key=f"sr_{row['code']}", use_container_width=True):
-                                    st.session_state.snowflake_selected_code = row['code']
-                                    st.session_state.snowflake_selected_name = row['name']
+                                    st.session_state.main_selected_code = row['code']
+                                    st.session_state.main_selected_name = row['name']
                                     st.rerun()
             except Exception:
                 pass
 
-    # 선택된 종목
-    selected_code = st.session_state.get('snowflake_selected_code')
-    selected_name = st.session_state.get('snowflake_selected_name')
+    # 선택된 종목 분석
+    selected_code = st.session_state.get('main_selected_code')
+    selected_name = st.session_state.get('main_selected_name')
 
     if selected_code and selected_name:
-        # 실제 펀더멘털 데이터 조회
+        st.divider()
+
+        # 펀더멘털 데이터 조회
         stock_data = _get_stock_fundamentals_for_snowflake(selected_code)
 
-        if stock_data:
+        if stock_data and SNOWFLAKE_ANALYSIS_AVAILABLE:
             scores = snowflake_analyzer.calculate_scores(fundamentals=stock_data, sector='default')
             grade, emoji, description = get_overall_rating(scores)
 
-            col1, col2 = st.columns([2, 1])
+            # 종목 헤더
+            st.markdown(f"## {emoji} {selected_name} ({selected_code})")
+            st.caption(f"종합 등급: **{grade}** | {description}")
 
-            with col1:
-                fig = create_snowflake_chart(scores, selected_name)
-                fig.update_layout(height=280, margin=dict(l=30, r=30, t=30, b=30))
-                st.plotly_chart(fig, use_container_width=True)
+            # 탭으로 분석 영역 구분
+            tab1, tab2, tab3 = st.tabs(["❄️ Snowflake 분석", "💬 전문가 토론", "📝 투자논리 검증"])
 
-            with col2:
-                st.markdown(f"### {emoji} {grade}")
-                st.caption(f"{selected_name} ({selected_code})")
-                st.markdown(f"""
-                | 지표 | 점수 |
-                |:---:|:---:|
-                | 가치 | {scores.value:.1f}/6 |
-                | 미래 | {scores.future:.1f}/6 |
-                | 과거 | {scores.past:.1f}/6 |
-                | 배당 | {scores.dividend:.1f}/6 |
-                | 건전성 | {scores.health:.1f}/6 |
-                | **종합** | **{scores.total:.1f}/6** |
-                """)
+            with tab1:
+                # Snowflake 차트
+                col1, col2 = st.columns([2, 1])
+
+                with col1:
+                    fig = create_snowflake_chart(scores, selected_name)
+                    fig.update_layout(height=350, margin=dict(l=30, r=30, t=30, b=30))
+                    st.plotly_chart(fig, use_container_width=True)
+
+                with col2:
+                    st.markdown("### 📊 점수 상세")
+                    st.markdown(f"""
+                    | 지표 | 점수 | 평가 |
+                    |:---:|:---:|:---:|
+                    | 💰 가치 | {scores.value:.1f}/6 | {"✅" if scores.value >= 4 else "⚠️" if scores.value >= 2.5 else "❌"} |
+                    | 🚀 미래 | {scores.future:.1f}/6 | {"✅" if scores.future >= 4 else "⚠️" if scores.future >= 2.5 else "❌"} |
+                    | 📈 과거 | {scores.past:.1f}/6 | {"✅" if scores.past >= 4 else "⚠️" if scores.past >= 2.5 else "❌"} |
+                    | 💵 배당 | {scores.dividend:.1f}/6 | {"✅" if scores.dividend >= 4 else "⚠️" if scores.dividend >= 2.5 else "❌"} |
+                    | 🏥 건전성 | {scores.health:.1f}/6 | {"✅" if scores.health >= 4 else "⚠️" if scores.health >= 2.5 else "❌"} |
+                    | **🎯 종합** | **{scores.total:.1f}/6** | **{emoji}** |
+                    """)
+
+                    # 핵심 요약
+                    st.markdown("### 💡 핵심 요약")
+                    if scores.total >= 4.5:
+                        st.success("우량 종목으로 평가됩니다")
+                    elif scores.total >= 3.5:
+                        st.info("양호한 편이나 일부 개선 필요")
+                    elif scores.total >= 2.5:
+                        st.warning("투자 전 추가 검토 권장")
+                    else:
+                        st.error("리스크 요인 다수 존재")
+
+            with tab2:
+                # 트레이더 토론
+                try:
+                    from components.trader_analysis import render_trader_discussion_ui
+                    scores_dict = {
+                        'total': scores.total,
+                        'value': scores.value,
+                        'future': scores.future,
+                        'past': scores.past,
+                        'dividend': scores.dividend,
+                        'health': scores.health
+                    }
+                    render_trader_discussion_ui(selected_name, selected_code, scores_dict, stock_data)
+                except ImportError as e:
+                    st.warning(f"트레이더 토론 모듈 로드 실패: {e}")
+
+            with tab3:
+                # 투자논리 검증
+                try:
+                    from components.trader_analysis import render_thesis_analysis_ui
+                    scores_dict = {
+                        'total': scores.total,
+                        'value': scores.value,
+                        'future': scores.future,
+                        'past': scores.past,
+                        'dividend': scores.dividend,
+                        'health': scores.health
+                    }
+                    render_thesis_analysis_ui(selected_name, selected_code, scores_dict, stock_data)
+                except ImportError as e:
+                    st.warning(f"투자논리 분석 모듈 로드 실패: {e}")
+
         else:
-            st.warning(f"{selected_name} 데이터를 불러올 수 없습니다.")
+            st.warning(f"{selected_name} 분석 데이터를 불러올 수 없습니다.")
     else:
         st.info("👆 종목을 검색하거나 인기 종목 버튼을 클릭하세요")
 
-    if st.button("❄️ Snowflake 상세 분석", key="view_snowflake", use_container_width=True):
-        st.session_state.current_page = 'snowflake'
-        st.rerun()
+
+def render_snowflake_compact():
+    """메인 대시보드용 Snowflake 분석 컴팩트 버전 - 전체 종목 지원 (레거시 호환)"""
+    render_integrated_stock_analysis()
 
 
 def _get_stock_fundamentals_for_snowflake(code: str) -> Optional[Dict]:
@@ -645,67 +695,123 @@ def render_catalyst_compact():
 
 
 def render_dashboard_page(data, prediction, scenario_summary):
-    """대시보드 (홈) 페이지 - 한국 시장 중심"""
-    st.markdown("## 📊 한국 주식 대시보드")
+    """메인 대시보드 - 한국 주식 통합 화면"""
 
-    # 온보딩 가이드
-    render_onboarding()
-
-    # ==================== 한국 시장 현황 ====================
+    # ==================== 상단: 시장 지수 + 실시간 키워드 ====================
     if KOREA_AVAILABLE:
         try:
             krx = KRXDataCollector()
             bok = BOKIndicators()
-
-            # 시장 요약 데이터
             market_summary = krx.get_market_summary()
             exchange_rates = bok.get_exchange_rates()
 
-            # 핵심 지표 (한국 시장)
-            col1, col2, col3, col4 = st.columns(4)
+            # 핵심 지표 바 (고정 상단)
+            st.markdown("""
+            <style>
+            .market-bar {
+                background: linear-gradient(90deg, #1e3a5f 0%, #2d5a87 100%);
+                padding: 0.8rem 1rem;
+                border-radius: 10px;
+                margin-bottom: 1rem;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+            col1, col2, col3, col4, col5 = st.columns(5)
 
             with col1:
                 kospi = market_summary.get('KOSPI', {})
                 kospi_close = kospi.get('close', 0)
                 kospi_change = kospi.get('change_pct', 0)
-                st.metric(
-                    "🇰🇷 KOSPI",
-                    f"{kospi_close:,.2f}",
-                    delta=f"{kospi_change:+.2f}%",
-                    delta_color="normal" if kospi_change >= 0 else "inverse"
-                )
+                delta_color = "normal" if kospi_change >= 0 else "inverse"
+                st.metric("🔵 KOSPI", f"{kospi_close:,.2f}", f"{kospi_change:+.2f}%", delta_color=delta_color)
 
             with col2:
                 kosdaq = market_summary.get('KOSDAQ', {})
                 kosdaq_close = kosdaq.get('close', 0)
                 kosdaq_change = kosdaq.get('change_pct', 0)
-                st.metric(
-                    "🇰🇷 KOSDAQ",
-                    f"{kosdaq_close:,.2f}",
-                    delta=f"{kosdaq_change:+.2f}%",
-                    delta_color="normal" if kosdaq_change >= 0 else "inverse"
-                )
+                delta_color = "normal" if kosdaq_change >= 0 else "inverse"
+                st.metric("🟢 KOSDAQ", f"{kosdaq_close:,.2f}", f"{kosdaq_change:+.2f}%", delta_color=delta_color)
 
             with col3:
                 usd_krw = exchange_rates.get('usd_krw', 0)
-                st.metric("💱 USD/KRW", f"₩{usd_krw:,.0f}")
+                st.metric("💱 원/달러", f"₩{usd_krw:,.0f}")
 
             with col4:
                 if 'vix' in data['market'].columns:
                     vix = data['market']['vix'].iloc[-1]
-                    st.metric("📊 VIX (공포지수)", f"{vix:.1f}")
+                    vix_status = "🟢" if vix < 20 else "🟡" if vix < 30 else "🔴"
+                    st.metric(f"{vix_status} VIX", f"{vix:.1f}")
                 else:
                     st.metric("📊 VIX", "N/A")
 
+            with col5:
+                # 시장 상태 요약
+                avg_change = (kospi_change + kosdaq_change) / 2
+                if avg_change > 1:
+                    st.metric("📈 시장", "강세", f"{avg_change:+.1f}%")
+                elif avg_change < -1:
+                    st.metric("📉 시장", "약세", f"{avg_change:+.1f}%")
+                else:
+                    st.metric("➡️ 시장", "보합", f"{avg_change:+.1f}%")
+
+            # 실시간 인기 키워드
+            st.markdown("---")
+            try:
+                from korea.market_keywords import get_realtime_keywords, get_fallback_keywords
+                keywords_data = get_realtime_keywords()
+                if not keywords_data or not keywords_data.get('popular_stocks'):
+                    keywords_data = get_fallback_keywords()
+
+                popular = keywords_data.get('popular_stocks', [])[:8]
+                themes = keywords_data.get('themes', [])[:5]
+
+                col_kw1, col_kw2 = st.columns([2, 1])
+
+                with col_kw1:
+                    st.markdown("#### 🔥 실시간 인기 종목")
+                    if popular:
+                        kw_cols = st.columns(min(len(popular), 8))
+                        for i, stock in enumerate(popular[:8]):
+                            with kw_cols[i]:
+                                name = stock.get('name', '')[:5]
+                                change = stock.get('change', '')
+                                if st.button(f"{i+1}. {name}", key=f"hot_{i}", use_container_width=True):
+                                    # 인기 종목 클릭 시 검색
+                                    st.session_state.main_selected_name = stock.get('name', '')
+                                    # 코드 찾기
+                                    try:
+                                        from korea.krx_data import search_korean_stock
+                                        results = search_korean_stock(stock.get('name', ''))
+                                        if results:
+                                            st.session_state.main_selected_code = results[0].get('code', '')
+                                    except:
+                                        pass
+                                    st.rerun()
+                    else:
+                        st.caption("인기 종목 로딩 중...")
+
+                with col_kw2:
+                    st.markdown("#### 📌 테마")
+                    if themes:
+                        for theme in themes[:4]:
+                            theme_name = theme.get('name', '') if isinstance(theme, dict) else str(theme)
+                            st.markdown(f"<span style='background:#f0f9ff; padding:3px 8px; border-radius:12px; font-size:0.85rem;'>{theme_name}</span>", unsafe_allow_html=True)
+                    else:
+                        st.caption("테마 로딩 중...")
+
+            except ImportError:
+                st.caption("실시간 키워드: 모듈 없음")
+            except Exception as e:
+                st.caption(f"키워드 로드 오류")
+
             st.divider()
 
-            # KOSPI/KOSDAQ 차트
-            st.subheader("📈 KOSPI / KOSDAQ 추이")
-
+            # KOSPI/KOSDAQ 미니 차트
             col_chart1, col_chart2 = st.columns(2)
 
             with col_chart1:
-                kospi_data = krx.get_index_data('KOSPI', days=30)
+                kospi_data = krx.get_index_data('KOSPI', days=20)
                 if not kospi_data.empty:
                     fig_kospi = go.Figure()
                     fig_kospi.add_trace(go.Candlestick(
@@ -714,18 +820,21 @@ def render_dashboard_page(data, prediction, scenario_summary):
                         high=kospi_data['High'],
                         low=kospi_data['Low'],
                         close=kospi_data['Close'],
-                        name='KOSPI'
+                        name='KOSPI',
+                        increasing_line_color='#ef4444',
+                        decreasing_line_color='#3b82f6'
                     ))
                     fig_kospi.update_layout(
-                        title="KOSPI (30일)",
-                        height=300,
-                        margin=dict(l=10, r=10, t=40, b=10),
-                        xaxis_rangeslider_visible=False
+                        title="KOSPI",
+                        height=220,
+                        margin=dict(l=5, r=5, t=30, b=5),
+                        xaxis_rangeslider_visible=False,
+                        showlegend=False
                     )
                     st.plotly_chart(fig_kospi, use_container_width=True)
 
             with col_chart2:
-                kosdaq_data = krx.get_index_data('KOSDAQ', days=30)
+                kosdaq_data = krx.get_index_data('KOSDAQ', days=20)
                 if not kosdaq_data.empty:
                     fig_kosdaq = go.Figure()
                     fig_kosdaq.add_trace(go.Candlestick(
@@ -735,105 +844,66 @@ def render_dashboard_page(data, prediction, scenario_summary):
                         low=kosdaq_data['Low'],
                         close=kosdaq_data['Close'],
                         name='KOSDAQ',
-                        increasing_line_color='red',
-                        decreasing_line_color='blue'
+                        increasing_line_color='#ef4444',
+                        decreasing_line_color='#3b82f6'
                     ))
                     fig_kosdaq.update_layout(
-                        title="KOSDAQ (30일)",
-                        height=300,
-                        margin=dict(l=10, r=10, t=40, b=10),
-                        xaxis_rangeslider_visible=False
+                        title="KOSDAQ",
+                        height=220,
+                        margin=dict(l=5, r=5, t=30, b=5),
+                        xaxis_rangeslider_visible=False,
+                        showlegend=False
                     )
                     st.plotly_chart(fig_kosdaq, use_container_width=True)
 
-            st.divider()
-
         except Exception as e:
-            st.warning(f"한국 시장 데이터 로드 중 오류: {e}")
-
-    # ==================== 핵심 분석 기능 ====================
-    st.markdown("---")
-    st.markdown("## 🔥 핵심 분석 기능")
-
-    # 1. SNS 스타일 시장 토론
-    if SNS_DISCUSSION_AVAILABLE:
-        try:
-            # 시장 데이터 가져오기
-            index_data = fetch_market_index_data(60)
-            gainers, losers = fetch_top_movers(5)
-
-            if index_data and 'KOSPI' in index_data:
-                kospi_data = index_data['KOSPI']
-                metrics = calculate_market_metrics(kospi_data)
-                condition = analyze_market_condition(metrics)
-                render_sns_discussion_compact(metrics, condition, gainers, losers)
-            else:
-                st.info("시장 토론: 데이터 로딩 중...")
-        except Exception as e:
-            st.caption(f"시장 토론 로드 오류: {e}")
+            st.warning(f"시장 데이터 로드 오류: {e}")
     else:
-        st.info("💬 SNS 시장 토론 기능을 사용하려면 market_overview 모듈이 필요합니다.")
+        st.warning("한국 시장 모듈을 사용할 수 없습니다. `pykrx` 패키지를 설치하세요.")
 
     st.divider()
 
-    # 2. Snowflake 분석 & 3. 잠재적 요인 분석 (나란히 배치)
-    col_snow, col_catalyst = st.columns(2)
+    # ==================== 핵심: 통합 종목 분석 ====================
+    st.markdown("## 🔍 종목 분석")
+    st.caption("종목을 검색하면 Snowflake 분석 + 전문가 토론 + 투자논리 검증이 한번에!")
 
-    with col_snow:
-        if SNOWFLAKE_ANALYSIS_AVAILABLE:
+    if SNOWFLAKE_ANALYSIS_AVAILABLE:
+        try:
+            render_integrated_stock_analysis()
+        except Exception as e:
+            st.error(f"종목 분석 로드 오류: {e}")
+    else:
+        st.info("Snowflake 분석 모듈을 사용할 수 없습니다.")
+
+    st.divider()
+
+    # ==================== 하단: 추가 기능 (접이식) ====================
+    with st.expander("💬 시장 토론 (트레이더들의 의견)", expanded=False):
+        if SNS_DISCUSSION_AVAILABLE:
             try:
-                render_snowflake_compact()
+                index_data = fetch_market_index_data(60)
+                gainers, losers = fetch_top_movers(5)
+                if index_data and 'KOSPI' in index_data:
+                    kospi_data_sns = index_data['KOSPI']
+                    metrics = calculate_market_metrics(kospi_data_sns)
+                    condition = analyze_market_condition(metrics)
+                    render_sns_discussion_compact(metrics, condition, gainers, losers)
             except Exception as e:
-                st.caption(f"Snowflake 로드 오류: {e}")
+                st.caption(f"시장 토론 로드 오류: {e}")
         else:
-            st.info("❄️ Snowflake 분석 기능을 사용하려면 snowflake_viz 모듈이 필요합니다.")
+            st.info("시장 토론 모듈이 필요합니다.")
 
-    with col_catalyst:
+    with st.expander("🎯 잠재적 급등/급락 요인", expanded=False):
         if POTENTIAL_ANALYSIS_AVAILABLE:
             try:
                 render_catalyst_compact()
             except Exception as e:
                 st.caption(f"잠재 요인 분석 로드 오류: {e}")
         else:
-            st.info("🎯 잠재 요인 분석 기능을 사용하려면 potential_analyzer 모듈이 필요합니다.")
+            st.info("잠재 요인 분석 모듈이 필요합니다.")
 
-    st.divider()
-
-    # 빠른 이동 버튼
-    st.markdown("### 🔗 빠른 이동")
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-
-    with col1:
-        if st.button("🇰🇷 한국 주식", use_container_width=True, key="quick_korea"):
-            st.session_state.current_page = 'korea'
-            st.rerun()
-    with col2:
-        if st.button("❄️ Snowflake", use_container_width=True, key="quick_snowflake"):
-            st.session_state.current_page = 'snowflake'
-            st.rerun()
-    with col3:
-        if st.button("🔥 급등/급락", use_container_width=True, key="quick_rally"):
-            st.session_state.current_page = 'rally'
-            st.rerun()
-    with col4:
-        if st.button("🤖 AI 분석", use_container_width=True, key="quick_ai"):
-            st.session_state.current_page = 'ai_analysis'
-            st.rerun()
-    with col5:
-        if st.button("🎯 잠재 요인", use_container_width=True, key="quick_potential"):
-            st.session_state.current_page = 'potential'
-            st.rerun()
-    with col6:
-        if st.button("📅 캘린더", use_container_width=True, key="quick_calendar"):
-            st.session_state.current_page = 'calendar'
-            st.rerun()
-
-    st.divider()
-
-    # 글로벌 시장 (참고용)
     with st.expander("🌍 글로벌 시장 현황", expanded=False):
         col1, col2 = st.columns(2)
-
         with col1:
             st.markdown("**미국 지수**")
             if 'sp500' in data['market'].columns:
@@ -846,11 +916,35 @@ def render_dashboard_page(data, prediction, scenario_summary):
                     ]
                 })
                 st.dataframe(market_df, use_container_width=True, hide_index=True)
-
         with col2:
             st.markdown("**시장 예측**")
             prob = prediction.probability * 100
             st.metric("상승 확률", f"{prob:.1f}%", delta=f"{prob - 50:.1f}%p")
+
+    # 빠른 이동 버튼
+    st.markdown("### 🔗 더 많은 기능")
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        if st.button("🔥 급등/급락", use_container_width=True, key="quick_rally"):
+            st.session_state.current_page = 'rally'
+            st.rerun()
+    with col2:
+        if st.button("🤖 AI 분석", use_container_width=True, key="quick_ai"):
+            st.session_state.current_page = 'ai_analysis'
+            st.rerun()
+    with col3:
+        if st.button("📊 포트폴리오", use_container_width=True, key="quick_portfolio"):
+            st.session_state.current_page = 'portfolio'
+            st.rerun()
+    with col4:
+        if st.button("📅 캘린더", use_container_width=True, key="quick_calendar"):
+            st.session_state.current_page = 'calendar'
+            st.rerun()
+    with col5:
+        if st.button("⚙️ 더보기", use_container_width=True, key="quick_more"):
+            st.session_state.current_page = 'tools'
+            st.rerun()
 
 
 def render_prediction_page(data, prediction, scenario_summary):
