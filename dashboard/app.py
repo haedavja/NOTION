@@ -155,6 +155,24 @@ try:
 except ImportError:
     SECTOR_ROTATION_AVAILABLE = False
 
+try:
+    from dashboard.market_overview_page import render_market_overview_page
+    MARKET_OVERVIEW_AVAILABLE = True
+except ImportError:
+    MARKET_OVERVIEW_AVAILABLE = False
+
+try:
+    from components.watchlist import render_watchlist_manager
+    WATCHLIST_AVAILABLE = True
+except ImportError:
+    WATCHLIST_AVAILABLE = False
+
+try:
+    from components.price_alert import render_alert_list
+    PRICE_ALERT_AVAILABLE = True
+except ImportError:
+    PRICE_ALERT_AVAILABLE = False
+
 # yfinance
 try:
     import yfinance as yf
@@ -689,6 +707,7 @@ def main():
     # 모듈 가용성 맵
     availability = {
         'dashboard': True,
+        'market_overview': MARKET_OVERVIEW_AVAILABLE,
         'prediction': True,
         'macro': True,
         'fund_flow': True,
@@ -705,6 +724,8 @@ def main():
         'benchmark': BENCHMARK_AVAILABLE,
         'correlation': CORRELATION_AVAILABLE,
         'tools': TOOLS_AVAILABLE,
+        'watchlist': WATCHLIST_AVAILABLE,
+        'alerts': PRICE_ALERT_AVAILABLE,
         'calendar': CALENDAR_AVAILABLE,
         'advanced': ADVANCED_AVAILABLE,
         'advanced_analysis': ADVANCED_ANALYSIS_AVAILABLE,
@@ -767,6 +788,12 @@ def main():
     # 홈 카테고리
     if current_page == 'dashboard':
         render_dashboard_page(data, prediction, scenario_summary)
+
+    elif current_page == 'market_overview':
+        if MARKET_OVERVIEW_AVAILABLE:
+            render_market_overview_page()
+        else:
+            render_unavailable_page("시장 종합 현황")
 
     elif current_page == 'prediction':
         render_prediction_page(data, prediction, scenario_summary)
@@ -853,6 +880,20 @@ def main():
             render_tools_page()
         else:
             render_unavailable_page("투자 도구")
+
+    elif current_page == 'watchlist':
+        if WATCHLIST_AVAILABLE:
+            st.header("⭐ 관심 종목 관리")
+            render_watchlist_manager()
+        else:
+            render_unavailable_page("관심 종목")
+
+    elif current_page == 'alerts':
+        if PRICE_ALERT_AVAILABLE:
+            st.header("🔔 가격 알림 관리")
+            render_alert_list()
+        else:
+            render_unavailable_page("가격 알림")
 
     elif current_page == 'calendar':
         if CALENDAR_AVAILABLE:

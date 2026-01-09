@@ -38,6 +38,7 @@ MENU_STRUCTURE: Dict[MenuCategory, Dict] = {
         "icon": "🏠",
         "items": [
             MenuItem("dashboard", "대시보드", "📊", MenuCategory.HOME, "핵심 지표 요약"),
+            MenuItem("market_overview", "시장 종합", "🌐", MenuCategory.HOME, "논리/근거/차트/리스크"),
             MenuItem("prediction", "종합 예측", "🎯", MenuCategory.HOME, "시장 방향 예측"),
         ]
     },
@@ -78,6 +79,8 @@ MENU_STRUCTURE: Dict[MenuCategory, Dict] = {
         "icon": "🛠️",
         "items": [
             MenuItem("tools", "투자 도구", "🛠️", MenuCategory.TOOLS, "계산기, 스크리너"),
+            MenuItem("watchlist", "관심 종목", "⭐", MenuCategory.TOOLS, "워치리스트 관리"),
+            MenuItem("alerts", "가격 알림", "🔔", MenuCategory.TOOLS, "목표가/손절가 알림"),
             MenuItem("calendar", "캘린더/워치", "📅", MenuCategory.TOOLS, "경제 일정, 워치리스트"),
             MenuItem("advanced", "고급 기능", "🔧", MenuCategory.TOOLS, "고급 설정"),
             MenuItem("advanced_analysis", "고급 분석", "🔬", MenuCategory.TOOLS, "심층 분석 도구"),
