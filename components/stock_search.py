@@ -1,6 +1,6 @@
 """
 종목 검색 자동완성 컴포넌트
-사용자 친화적인 종목 검색 UI
+실시간 검색 및 자동완성 지원
 """
 
 import streamlit as st
@@ -36,10 +36,35 @@ POPULAR_STOCKS = [
     {'code': '352820', 'name': '하이브', 'market': 'KOSPI'},
 ]
 
+# 캐시된 전체 종목 리스트
+_cached_stock_list = None
+
+
+def get_all_stocks() -> List[Dict]:
+    """전체 종목 리스트 가져오기 (캐싱)"""
+    global _cached_stock_list
+
+    if _cached_stock_list is not None:
+        return _cached_stock_list
+
+    if KRX_AVAILABLE:
+        try:
+            krx = KRXDataCollector()
+            df = krx.get_stock_list('ALL')
+            if not df.empty:
+                _cached_stock_list = df.to_dict('records')
+                return _cached_stock_list
+        except Exception:
+            pass
+
+    # 폴백: 인기 종목
+    _cached_stock_list = POPULAR_STOCKS
+    return _cached_stock_list
+
 
 def search_stocks(query: str, limit: int = 10) -> List[Dict]:
     """
-    종목 검색
+    종목 검색 - 1글자부터 실시간 검색
 
     Args:
         query: 검색어 (종목명 또는 코드)
@@ -51,90 +76,112 @@ def search_stocks(query: str, limit: int = 10) -> List[Dict]:
     if not query or len(query.strip()) < 1:
         return []
 
-    query = query.strip()
+    query = query.strip().lower()
+    all_stocks = get_all_stocks()
 
-    # KRX 검색 시도
-    if KRX_AVAILABLE:
-        try:
-            results = search_korean_stock(query, limit)
-            if results:
-                return results
-        except Exception:
-            pass
-
-    # 폴백: 인기 종목에서 검색
     results = []
-    query_lower = query.lower()
 
-    for stock in POPULAR_STOCKS:
-        if (query_lower in stock['name'].lower() or
-            query in stock['code']):
+    # 정확히 일치하는 것 먼저
+    for stock in all_stocks:
+        name = stock.get('name', '').lower()
+        code = stock.get('code', '')
+
+        # 정확히 일치
+        if name == query or code == query:
+            results.insert(0, stock)
+        # 시작 부분 일치 (우선순위 높음)
+        elif name.startswith(query) or code.startswith(query):
             results.append(stock)
-            if len(results) >= limit:
-                break
 
-    return results
+        if len(results) >= limit:
+            break
+
+    # 부분 일치 추가
+    if len(results) < limit:
+        for stock in all_stocks:
+            if stock in results:
+                continue
+
+            name = stock.get('name', '').lower()
+            code = stock.get('code', '')
+
+            if query in name or query in code:
+                results.append(stock)
+
+                if len(results) >= limit:
+                    break
+
+    return results[:limit]
 
 
-def render_stock_search(
-    key: str = "stock_search",
-    label: str = "종목 검색",
-    placeholder: str = "종목명 또는 코드 입력 (예: 삼성전자, 005930)",
+def render_stock_autocomplete(
+    key: str = "stock_autocomplete",
+    label: str = "🔍 종목 검색",
+    placeholder: str = "종목명 또는 코드 (예: 삼성, 005930)",
     show_popular: bool = True,
-    on_select: Optional[Callable[[Dict], None]] = None
+    default_code: str = None,
+    default_name: str = None,
 ) -> Optional[Dict]:
     """
-    종목 검색 UI 렌더링
+    실시간 자동완성 종목 검색 UI
 
     Args:
         key: Streamlit 위젯 키
         label: 레이블
         placeholder: 플레이스홀더
         show_popular: 인기 종목 표시 여부
-        on_select: 선택 시 콜백 함수
+        default_code: 기본 선택 코드
+        default_name: 기본 선택 이름
 
     Returns:
-        선택된 종목 정보 또는 None
+        선택된 종목 정보 {'code': ..., 'name': ..., 'market': ...} 또는 None
     """
-    selected_stock = None
+    # 세션 상태 초기화
+    if f"{key}_selected_code" not in st.session_state:
+        st.session_state[f"{key}_selected_code"] = default_code
+    if f"{key}_selected_name" not in st.session_state:
+        st.session_state[f"{key}_selected_name"] = default_name
 
     # 검색 입력
-    col1, col2 = st.columns([4, 1])
+    search_query = st.text_input(
+        label,
+        key=f"{key}_input",
+        placeholder=placeholder,
+        help="1글자 이상 입력하면 자동으로 검색됩니다"
+    )
 
-    with col1:
-        search_query = st.text_input(
-            label,
-            key=f"{key}_input",
-            placeholder=placeholder,
-            help="종목명(한글) 또는 6자리 코드로 검색"
-        )
+    selected_stock = None
 
-    with col2:
-        search_btn = st.button("🔍", key=f"{key}_btn", use_container_width=True)
-
-    # 검색 결과 표시
-    if search_query and (search_btn or len(search_query) >= 2):
-        results = search_stocks(search_query)
+    # 실시간 검색 결과 (1글자 이상이면 검색)
+    if search_query and len(search_query) >= 1:
+        results = search_stocks(search_query, limit=12)
 
         if results:
-            st.markdown("##### 검색 결과")
+            st.markdown("##### 📋 검색 결과")
 
-            # 결과를 버튼으로 표시
-            cols = st.columns(min(len(results), 3))
-            for i, stock in enumerate(results[:9]):
+            # 3열 그리드로 표시
+            cols = st.columns(3)
+            for i, stock in enumerate(results):
                 col_idx = i % 3
                 with cols[col_idx]:
-                    btn_label = f"{stock['name']}\n({stock['code']})"
-                    if st.button(btn_label, key=f"{key}_result_{i}", use_container_width=True):
-                        selected_stock = stock
-                        if on_select:
-                            on_select(stock)
-                        st.session_state[f"{key}_selected"] = stock
-        else:
-            st.info("검색 결과가 없습니다. 다른 키워드로 검색해보세요.")
+                    market_badge = "🔵" if stock.get('market') == 'KOSPI' else "🟢"
+                    btn_label = f"{market_badge} {stock['name']}\n`{stock['code']}`"
 
-    # 인기 종목 표시
-    if show_popular and not search_query:
+                    if st.button(
+                        btn_label,
+                        key=f"{key}_result_{i}",
+                        use_container_width=True,
+                        help=f"{stock.get('market', '')} | 클릭하여 선택"
+                    ):
+                        st.session_state[f"{key}_selected_code"] = stock['code']
+                        st.session_state[f"{key}_selected_name"] = stock['name']
+                        selected_stock = stock
+                        st.rerun()
+        else:
+            st.info(f"'{search_query}'에 해당하는 종목이 없습니다.")
+
+    # 인기 종목 표시 (검색어가 없을 때)
+    elif show_popular and not search_query:
         with st.expander("⭐ 인기 종목 바로가기", expanded=False):
             cols = st.columns(5)
             for i, stock in enumerate(POPULAR_STOCKS[:15]):
@@ -146,16 +193,63 @@ def render_stock_search(
                         help=f"{stock['code']} ({stock['market']})",
                         use_container_width=True
                     ):
+                        st.session_state[f"{key}_selected_code"] = stock['code']
+                        st.session_state[f"{key}_selected_name"] = stock['name']
                         selected_stock = stock
-                        if on_select:
-                            on_select(stock)
-                        st.session_state[f"{key}_selected"] = stock
+                        st.rerun()
 
-    # 세션에서 선택된 종목 반환
-    if selected_stock:
-        return selected_stock
+    # 현재 선택된 종목 표시
+    current_code = st.session_state.get(f"{key}_selected_code")
+    current_name = st.session_state.get(f"{key}_selected_name")
 
-    return st.session_state.get(f"{key}_selected")
+    if current_code and current_name:
+        st.success(f"✅ 선택된 종목: **{current_name}** (`{current_code}`)")
+
+        # 선택된 종목 정보 반환
+        if selected_stock:
+            return selected_stock
+        else:
+            # 세션에서 가져온 경우
+            return {
+                'code': current_code,
+                'name': current_name,
+                'market': 'KOSPI'  # 기본값
+            }
+
+    return None
+
+
+def render_stock_search(
+    key: str = "stock_search",
+    label: str = "종목 검색",
+    placeholder: str = "종목명 또는 코드 입력 (예: 삼성전자, 005930)",
+    show_popular: bool = True,
+    on_select: Optional[Callable[[Dict], None]] = None
+) -> Optional[Dict]:
+    """
+    종목 검색 UI 렌더링 (기존 호환)
+
+    Args:
+        key: Streamlit 위젯 키
+        label: 레이블
+        placeholder: 플레이스홀더
+        show_popular: 인기 종목 표시 여부
+        on_select: 선택 시 콜백 함수
+
+    Returns:
+        선택된 종목 정보 또는 None
+    """
+    result = render_stock_autocomplete(
+        key=key,
+        label=label,
+        placeholder=placeholder,
+        show_popular=show_popular
+    )
+
+    if result and on_select:
+        on_select(result)
+
+    return result
 
 
 def render_stock_selector(
@@ -268,14 +362,18 @@ def get_stock_display_name(code: str) -> str:
         if stock['code'] == code:
             return f"{stock['name']} ({code})"
 
-    # KRX 조회
-    if KRX_AVAILABLE:
-        try:
-            collector = KRXDataCollector()
-            info = collector.get_stock_by_code(code)
-            if info:
-                return f"{info['name']} ({code})"
-        except Exception:
-            pass
+    # 전체 목록에서 검색
+    all_stocks = get_all_stocks()
+    for stock in all_stocks:
+        if stock.get('code') == code:
+            return f"{stock.get('name', '')} ({code})"
 
     return code
+
+
+def clear_stock_selection(key: str):
+    """종목 선택 초기화"""
+    if f"{key}_selected_code" in st.session_state:
+        del st.session_state[f"{key}_selected_code"]
+    if f"{key}_selected_name" in st.session_state:
+        del st.session_state[f"{key}_selected_name"]

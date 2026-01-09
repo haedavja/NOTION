@@ -472,69 +472,56 @@ def render_sns_discussion_compact(metrics: dict, condition: dict, gainers: list,
 def render_snowflake_compact():
     """메인 대시보드용 Snowflake 분석 컴팩트 버전 - 전체 종목 지원"""
     st.markdown("### ❄️ 종목 Snowflake 분석")
-    st.caption("한국 전체 종목 검색 가능 (2,500+ 종목)")
+    st.caption("한국 전체 종목 검색 가능 (2,400+ 종목) - 1글자 입력 시 자동완성")
 
-    # 종목 검색
-    search_input = st.text_input(
-        "🔍 종목 검색",
-        placeholder="종목명 또는 코드 입력 (예: 삼성전자, 005930, 셀트리온)",
-        key="main_snowflake_search"
-    )
+    # 새로운 자동완성 검색 컴포넌트 사용
+    try:
+        from components.stock_search import render_stock_autocomplete
 
-    # 선택된 종목
-    selected_code = st.session_state.get('snowflake_selected_code')
-    selected_name = st.session_state.get('snowflake_selected_name')
+        selected = render_stock_autocomplete(
+            key="snowflake_main",
+            label="🔍 종목 검색",
+            placeholder="종목명 또는 코드 (예: 삼성, 다날, 005930)",
+            show_popular=True,
+            default_code=st.session_state.get('snowflake_selected_code'),
+            default_name=st.session_state.get('snowflake_selected_name')
+        )
 
-    # 검색 결과 표시
-    if search_input:
-        if not KOREA_AVAILABLE:
-            st.warning(f"⚠️ '{search_input}' - 한국 주식 모듈이 비활성화되어 검색할 수 없습니다.")
-        else:
+        if selected:
+            st.session_state.snowflake_selected_code = selected['code']
+            st.session_state.snowflake_selected_name = selected['name']
+
+    except ImportError:
+        # 폴백: 기존 방식
+        search_input = st.text_input(
+            "🔍 종목 검색",
+            placeholder="종목명 또는 코드 입력",
+            key="main_snowflake_search"
+        )
+
+        if search_input and KOREA_AVAILABLE:
             try:
                 krx = KRXDataCollector()
                 stock_list = krx.get_stock_list('ALL')
                 if not stock_list.empty:
-                    # 이름 또는 코드로 검색
                     mask = (stock_list['name'].str.contains(search_input, case=False, na=False) |
                             stock_list['code'].str.contains(search_input, na=False))
-                    matches = stock_list[mask].head(10)
+                    matches = stock_list[mask].head(5)
 
                     if not matches.empty:
-                        st.caption(f"🔎 검색 결과 ({len(matches)}개)")
-                        # 검색 결과를 버튼으로 표시
-                        result_cols = st.columns(min(5, len(matches)))
-                        for i, (_, row) in enumerate(matches.head(5).iterrows()):
-                            with result_cols[i]:
-                                if st.button(
-                                    f"{row['name'][:6]}",
-                                    key=f"search_result_{row['code']}",
-                                    use_container_width=True,
-                                    help=f"{row['name']} ({row['code']})"
-                                ):
+                        cols = st.columns(len(matches))
+                        for i, (_, row) in enumerate(matches.iterrows()):
+                            with cols[i]:
+                                if st.button(row['name'][:6], key=f"sr_{row['code']}", use_container_width=True):
                                     st.session_state.snowflake_selected_code = row['code']
                                     st.session_state.snowflake_selected_name = row['name']
                                     st.rerun()
-                    else:
-                        st.error(f"❌ '{search_input}' 종목을 찾을 수 없습니다. 정확한 종목명이나 코드를 입력하세요.")
-                else:
-                    st.error(f"❌ '{search_input}' - 종목 데이터를 불러올 수 없습니다.")
-            except Exception as e:
-                st.error(f"❌ 검색 오류: {e}")
+            except Exception:
+                pass
 
-    # 인기 종목 퀵 버튼
-    popular_stocks = [
-        ('삼성전자', '005930'), ('SK하이닉스', '000660'), ('현대차', '005380'),
-        ('NAVER', '035420'), ('카카오', '035720'), ('LG에너지솔루션', '373220')
-    ]
-
-    st.caption("📌 인기 종목:")
-    quick_cols = st.columns(6)
-    for i, (name, code) in enumerate(popular_stocks):
-        with quick_cols[i]:
-            if st.button(name[:4], key=f"quick_snow_{code}", use_container_width=True):
-                st.session_state.snowflake_selected_code = code
-                st.session_state.snowflake_selected_name = name
-                st.rerun()
+    # 선택된 종목
+    selected_code = st.session_state.get('snowflake_selected_code')
+    selected_name = st.session_state.get('snowflake_selected_name')
 
     if selected_code and selected_name:
         # 실제 펀더멘털 데이터 조회
