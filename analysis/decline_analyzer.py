@@ -260,7 +260,9 @@ class DeclineDetector:
             gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
 
-            rs = gain / loss
+            # ZeroDivisionError 방지
+            loss_adj = loss.replace(0, 1e-10)
+            rs = gain / loss_adj
             rsi = 100 - (100 / (1 + rs))
 
             return float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
@@ -280,7 +282,7 @@ class DeclineDetector:
             '철강': '139260',
             '건설': '139220',
             '화학': '139250',
-            '미디어': '091180',
+            '미디어': '228790',  # TIGER 미디어컨텐츠
             '에너지': '117460',
         }
 

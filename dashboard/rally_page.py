@@ -392,6 +392,10 @@ def render_decline_section():
 
 def render_top_declines():
     """급락 종목 탭"""
+    # session_state 초기화
+    if 'run_decline_analysis' not in st.session_state:
+        st.session_state.run_decline_analysis = False
+
     st.subheader("📉 최근 급락 종목 분석")
 
     col1, col2 = st.columns([2, 1])
@@ -405,7 +409,7 @@ def render_top_declines():
         if st.button("🔄 분석 시작", key="start_decline_analysis", type="primary"):
             st.session_state.run_decline_analysis = True
 
-    if st.session_state.get('run_decline_analysis'):
+    if st.session_state.run_decline_analysis:
         with st.spinner("급락 종목 분석 중..."):
             try:
                 detector = DeclineDetector()

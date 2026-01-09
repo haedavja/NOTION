@@ -323,7 +323,9 @@ def _calculate_technical_data(price_data: pd.DataFrame) -> Dict:
         delta = close.diff()
         gain = delta.where(delta > 0, 0).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
+        # ZeroDivisionError 방지
+        loss_adj = loss.replace(0, 1e-10)
+        rs = gain / loss_adj
         rsi = 100 - (100 / (1 + rs))
         rsi_value = float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50
 

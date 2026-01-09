@@ -361,7 +361,7 @@ class KRXDataCollector:
         dates = pd.date_range(end=datetime.now(), periods=100, freq='B')
         base_price = 70000 if code == '005930' else 50000
 
-        np.random.seed(hash(code) % 2**32)
+        np.random.seed(abs(hash(code)) % 2**32)
         returns = np.random.randn(100) * 0.02
         prices = base_price * np.exp(np.cumsum(returns))
 
@@ -610,7 +610,7 @@ class KRXDataCollector:
     def _get_sample_investor_trading(self, code: str) -> Dict:
         """샘플 투자자 매매동향"""
         import random
-        random.seed(hash(code) % 2**32)
+        random.seed(abs(hash(code)) % 2**32)
 
         return {
             'foreign_net': random.randint(-50_000_000_000, 50_000_000_000),

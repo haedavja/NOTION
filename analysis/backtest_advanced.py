@@ -140,7 +140,9 @@ class RSIStrategy(Strategy):
         gain = (delta.where(delta > 0, 0)).rolling(window=self.period).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean()
 
-        rs = gain / loss
+        # ZeroDivisionError 방지
+        loss_adj = loss.replace(0, 1e-10)
+        rs = gain / loss_adj
         rsi = 100 - (100 / (1 + rs))
 
         # 과매도 탈출 (매수)
