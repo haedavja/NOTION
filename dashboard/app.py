@@ -70,6 +70,12 @@ try:
 except ImportError:
     AI_CHAT_AVAILABLE = False
 
+try:
+    from dashboard.calendar_page import render_calendar_watchlist_page
+    CALENDAR_AVAILABLE = True
+except ImportError:
+    CALENDAR_AVAILABLE = False
+
 
 # 페이지 설정
 st.set_page_config(
@@ -559,10 +565,11 @@ def main():
         "🇰🇷 한국 주식",
         "🔧 고급 기능",
         "🛠️ 투자 도구",
-        "🧠 AI 어시스턴트"
+        "🧠 AI 어시스턴트",
+        "📅 캘린더/워치"
     ]
     tabs = st.tabs(tab_names)
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = tabs
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = tabs
 
     # ========== 탭 1: 종합 예측 ==========
     with tab1:
@@ -888,6 +895,21 @@ def main():
 
             **필요한 설정:**
             - OPENAI_API_KEY 환경변수
+            """)
+
+    # ========== 탭 13: 캘린더/워치리스트 ==========
+    with tab13:
+        if CALENDAR_AVAILABLE:
+            render_calendar_watchlist_page()
+        else:
+            st.warning("캘린더/워치리스트 모듈을 사용할 수 없습니다.")
+            st.info("calendar_page 모듈을 확인하세요.")
+            st.markdown("""
+            **포함 기능:**
+            - 📅 경제 캘린더 (FOMC, CPI 등)
+            - ⭐ 워치리스트 관리
+            - 📊 차트 패턴 분석
+            - 💾 데이터 백업/복원
             """)
 
     # 푸터

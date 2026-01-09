@@ -13,6 +13,10 @@ from .technical_indicators import (
 )
 from .stock_comparator import StockComparator, StockMetrics, ComparisonResult, stock_comparator
 from .social_sentiment import SocialSentimentAnalyzer, SentimentScore, social_analyzer
+from .chart_patterns import (
+    ChartPatternAnalyzer, PatternType, PatternSignal, PatternResult,
+    SupportResistance, chart_analyzer, analyze_patterns, find_support_resistance
+)
 
 __all__ = [
     'MacroAnalyzer', 'FlowAnalyzer', 'SentimentAnalyzer', 'TechnicalAnalyzer',
@@ -22,5 +26,7 @@ __all__ = [
     'backtester', 'quick_backtest',
     'TechnicalIndicators', 'SignalAnalyzer', 'IndicatorSignal', 'analyze_stock',
     'StockComparator', 'StockMetrics', 'ComparisonResult', 'stock_comparator',
-    'SocialSentimentAnalyzer', 'SentimentScore', 'social_analyzer'
+    'SocialSentimentAnalyzer', 'SentimentScore', 'social_analyzer',
+    'ChartPatternAnalyzer', 'PatternType', 'PatternSignal', 'PatternResult',
+    'SupportResistance', 'chart_analyzer', 'analyze_patterns', 'find_support_resistance'
 ]

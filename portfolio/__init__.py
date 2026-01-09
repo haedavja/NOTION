@@ -15,6 +15,10 @@ from .multi_portfolio import (
 )
 from .rebalancer import PortfolioRebalancer, RebalanceReport, rebalancer
 from .tax_calculator import TaxCalculator, TaxCalculation, MarketType, tax_calculator
+from .watchlist import (
+    WatchlistManager, WatchlistItem as WatchlistEntry, WatchlistGroupInfo,
+    watchlist_manager, add_to_watchlist, get_watchlist, update_watchlist_prices
+)
 
 __all__ = [
     'Portfolio', 'Position', 'PortfolioAnalyzer',
@@ -26,5 +30,7 @@ __all__ = [
     'MultiPortfolioManager', 'PortfolioType', 'PortfolioMeta',
     'WatchlistItem', 'portfolio_manager',
     'PortfolioRebalancer', 'RebalanceReport', 'rebalancer',
-    'TaxCalculator', 'TaxCalculation', 'MarketType', 'tax_calculator'
+    'TaxCalculator', 'TaxCalculation', 'MarketType', 'tax_calculator',
+    'WatchlistManager', 'WatchlistEntry', 'WatchlistGroupInfo',
+    'watchlist_manager', 'add_to_watchlist', 'get_watchlist', 'update_watchlist_prices'
 ]
