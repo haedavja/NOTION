@@ -127,6 +127,18 @@ def render_top_rallies():
 
             except Exception as e:
                 st.error(f"분석 오류: {e}")
+                with st.expander("🔧 문제 해결 방법"):
+                    st.markdown("""
+                    **가능한 원인:**
+                    - pykrx 패키지가 설치되지 않음
+                    - 네트워크 연결 문제
+                    - KRX 서버 응답 지연
+
+                    **해결 방법:**
+                    1. `pip install pykrx` 실행
+                    2. 네트워크 연결 확인
+                    3. 잠시 후 다시 시도
+                    """)
 
 
 def render_single_analysis():
@@ -167,6 +179,18 @@ def render_single_analysis():
 
             except Exception as e:
                 st.error(f"분석 오류: {e}")
+                with st.expander("🔧 문제 해결 방법"):
+                    st.markdown("""
+                    **가능한 원인:**
+                    - pykrx 패키지가 설치되지 않음
+                    - 네트워크 연결 문제
+                    - KRX 서버 응답 지연
+
+                    **해결 방법:**
+                    1. `pip install pykrx` 실행
+                    2. 네트워크 연결 확인
+                    3. 잠시 후 다시 시도
+                    """)
 
 
 def render_sector_analysis():
@@ -421,6 +445,18 @@ def render_top_declines():
 
             except Exception as e:
                 st.error(f"분석 오류: {e}")
+                with st.expander("🔧 문제 해결 방법"):
+                    st.markdown("""
+                    **가능한 원인:**
+                    - pykrx 패키지가 설치되지 않음
+                    - 네트워크 연결 문제
+                    - KRX 서버 응답 지연
+
+                    **해결 방법:**
+                    1. `pip install pykrx` 실행
+                    2. 네트워크 연결 확인
+                    3. 잠시 후 다시 시도
+                    """)
 
 
 def render_single_decline_analysis():
@@ -459,6 +495,18 @@ def render_single_decline_analysis():
 
             except Exception as e:
                 st.error(f"분석 오류: {e}")
+                with st.expander("🔧 문제 해결 방법"):
+                    st.markdown("""
+                    **가능한 원인:**
+                    - pykrx 패키지가 설치되지 않음
+                    - 네트워크 연결 문제
+                    - KRX 서버 응답 지연
+
+                    **해결 방법:**
+                    1. `pip install pykrx` 실행
+                    2. 네트워크 연결 확인
+                    3. 잠시 후 다시 시도
+                    """)
 
 
 def render_sector_declines():

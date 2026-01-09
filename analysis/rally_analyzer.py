@@ -188,6 +188,15 @@ class RallyDetector:
                     elif period == '5d' and change_5d < self.min_change_5d:
                         continue
 
+                    # 수급 데이터 조회
+                    try:
+                        investor_data = krx.get_investor_trading_by_stock(code, 5)
+                        foreign_net = investor_data.get('foreign_net', 0)
+                        inst_net = investor_data.get('inst_net', 0)
+                    except Exception:
+                        foreign_net = 0
+                        inst_net = 0
+
                     rally = RallyInfo(
                         symbol=code,
                         name=name,
@@ -197,8 +206,8 @@ class RallyDetector:
                         change_5d=change_5d,
                         change_1m=change_1m,
                         volume_ratio=volume_ratio,
-                        foreign_net_buy=0,  # 별도 조회 필요
-                        inst_net_buy=0,
+                        foreign_net_buy=foreign_net,
+                        inst_net_buy=inst_net,
                         market_cap=0,
                     )
                     rallies.append(rally)
@@ -229,8 +238,11 @@ class RallyDetector:
             '바이오': '244580',
             '은행': '091170',
             '자동차': '091180',
-            '철강': '117700',
-            '건설': '117700',
+            '철강': '139260',
+            '건설': '139220',
+            '화학': '139250',
+            '미디어': '091180',
+            '에너지': '117460',
         }
 
         try:

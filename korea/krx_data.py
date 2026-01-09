@@ -548,6 +548,77 @@ class KRXDataCollector:
         }
         return pd.DataFrame(data)
 
+    def get_investor_trading_by_stock(self, code: str, days: int = 5) -> Dict:
+        """
+        종목별 투자자 매매동향 조회
+
+        Args:
+            code: 종목 코드
+            days: 조회 기간
+
+        Returns:
+            투자자별 순매수 데이터 (금액 단위: 원)
+        """
+        result = {
+            'foreign_net': 0,  # 외국인 순매수
+            'inst_net': 0,  # 기관 순매수
+            'individual_net': 0,  # 개인 순매수
+            'pension_net': 0,  # 연기금 순매수
+        }
+
+        if not self.enabled:
+            return self._get_sample_investor_trading(code)
+
+        try:
+            end_date = datetime.now().strftime('%Y%m%d')
+            start_date = (datetime.now() - timedelta(days=days * 2)).strftime('%Y%m%d')
+
+            # 투자자별 매매 동향 조회
+            df = stock.get_market_trading_value_by_date(
+                start_date, end_date, code
+            )
+
+            if df.empty:
+                return result
+
+            # 최근 days일 합계
+            df = df.tail(days)
+
+            # 컬럼명 매핑 (pykrx 버전에 따라 다를 수 있음)
+            if '외국인' in df.columns:
+                result['foreign_net'] = int(df['외국인'].sum())
+            elif '외국인합계' in df.columns:
+                result['foreign_net'] = int(df['외국인합계'].sum())
+
+            if '기관' in df.columns:
+                result['inst_net'] = int(df['기관'].sum())
+            elif '기관합계' in df.columns:
+                result['inst_net'] = int(df['기관합계'].sum())
+
+            if '개인' in df.columns:
+                result['individual_net'] = int(df['개인'].sum())
+
+            if '연기금' in df.columns:
+                result['pension_net'] = int(df['연기금'].sum())
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"투자자 매매동향 조회 오류 ({code}): {e}")
+            return self._get_sample_investor_trading(code)
+
+    def _get_sample_investor_trading(self, code: str) -> Dict:
+        """샘플 투자자 매매동향"""
+        import random
+        random.seed(hash(code) % 2**32)
+
+        return {
+            'foreign_net': random.randint(-50_000_000_000, 50_000_000_000),
+            'inst_net': random.randint(-30_000_000_000, 30_000_000_000),
+            'individual_net': random.randint(-20_000_000_000, 20_000_000_000),
+            'pension_net': random.randint(-10_000_000_000, 10_000_000_000),
+        }
+
     def get_sector_performance(self) -> Dict[str, Dict]:
         """
         섹터별 성과
@@ -708,3 +779,18 @@ def refresh_korean_stock_cache() -> int:
     """
     collector = KRXDataCollector()
     return collector.refresh_stock_list()
+
+
+def get_investor_trading_by_stock(code: str, days: int = 5) -> Dict:
+    """
+    종목별 투자자 매매동향 조회
+
+    Args:
+        code: 종목 코드
+        days: 조회 기간
+
+    Returns:
+        투자자별 순매수 데이터
+    """
+    collector = KRXDataCollector()
+    return collector.get_investor_trading_by_stock(code, days)

@@ -212,6 +212,16 @@ class DeclineDetector:
                     elif period == '5d' and change_5d > self.min_decline_5d:
                         continue
 
+                    # 수급 데이터 조회
+                    try:
+                        investor_data = krx.get_investor_trading_by_stock(code, 5)
+                        # 순매도 = -순매수
+                        foreign_net_sell = -investor_data.get('foreign_net', 0)
+                        inst_net_sell = -investor_data.get('inst_net', 0)
+                    except Exception:
+                        foreign_net_sell = 0
+                        inst_net_sell = 0
+
                     decline = DeclineInfo(
                         symbol=code,
                         name=name,
@@ -222,8 +232,8 @@ class DeclineDetector:
                         change_1m=change_1m,
                         change_from_high=change_from_high,
                         volume_ratio=volume_ratio,
-                        foreign_net_sell=0,
-                        inst_net_sell=0,
+                        foreign_net_sell=foreign_net_sell if foreign_net_sell > 0 else 0,
+                        inst_net_sell=inst_net_sell if inst_net_sell > 0 else 0,
                         rsi=rsi,
                     )
                     declines.append(decline)
@@ -267,8 +277,11 @@ class DeclineDetector:
             '바이오': '244580',
             '은행': '091170',
             '자동차': '091180',
-            '철강': '117700',
-            '건설': '117700',
+            '철강': '139260',
+            '건설': '139220',
+            '화학': '139250',
+            '미디어': '091180',
+            '에너지': '117460',
         }
 
         try:
