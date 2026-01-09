@@ -3,6 +3,7 @@
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -184,10 +185,8 @@ def render_market_keywords():
 
     tags_html += '</div>'
 
-    st.markdown(tags_html, unsafe_allow_html=True)
-
-    # 범례
-    st.markdown("""
+    # 범례 추가
+    legend_html = """
     <div style="text-align:center;margin-top:10px;font-size:0.8em;color:#888;">
         <span style="color:#ef4444;">●</span> 핫(90%+) &nbsp;
         <span style="color:#f97316;">●</span> 상승(70%+) &nbsp;
@@ -195,7 +194,22 @@ def render_market_keywords():
         <span style="color:#6b7280;">●</span> 보통 &nbsp;
         | 글자 크기 = 관심도
     </div>
-    """, unsafe_allow_html=True)
+    """
+
+    # 키워드 수에 따라 높이 동적 계산
+    num_keywords = len(all_keywords)
+    estimated_height = max(150, min(400, 80 + num_keywords * 15))
+
+    # components.html 사용으로 안정적인 HTML 렌더링
+    full_html = f"""
+    <html>
+    <body style="margin:0;padding:10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    {tags_html}
+    {legend_html}
+    </body>
+    </html>
+    """
+    components.html(full_html, height=estimated_height, scrolling=True)
 
 
 def create_candlestick_chart(df: pd.DataFrame, title: str):
