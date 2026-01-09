@@ -767,6 +767,49 @@ def render_trader_discussion_ui(
     # 사용자 입력 섹션
     st.markdown("### 💭 질문하기 / 토론 이어가기")
 
+    # 추천 질문 버튼
+    st.caption("🏷️ 추천 질문 (클릭하면 자동 입력)")
+    suggested_questions = [
+        ("🚨 상장폐지?", "상장폐지 위험이 있나요?"),
+        ("📈 전망은?", "앞으로 전망이 어떻게 될까요?"),
+        ("⚠️ 위험한가?", "이 종목 위험하지 않나요?"),
+        ("💰 매수해도?", "지금 매수해도 될까요?"),
+        ("💸 팔아야?", "지금 팔아야 할까요?"),
+        ("📊 실적은?", "실적은 어떤가요?"),
+        ("🎁 배당은?", "배당 매력은 있나요?"),
+        ("💵 저평가?", "지금 저평가 상태인가요?"),
+    ]
+
+    sq_cols = st.columns(len(suggested_questions))
+    selected_question = None
+
+    for i, (label, question) in enumerate(suggested_questions):
+        with sq_cols[i]:
+            if st.button(label, key=f"sq_{stock_code}_{i}", use_container_width=True):
+                selected_question = question
+
+    # 추천 질문이 선택되면 바로 질문 처리
+    if selected_question:
+        add_to_discussion(stock_code, {
+            'type': 'user_question',
+            'message': selected_question,
+            'timestamp': datetime.now().strftime("%H:%M")
+        })
+        responders = random.sample(STOCK_TRADERS, min(3, len(STOCK_TRADERS)))
+        for trader in responders:
+            response = generate_trader_response_to_user(
+                trader, selected_question, stock_name, scores, disc_state['history']
+            )
+            add_to_discussion(stock_code, {
+                'type': 'trader_response',
+                'trader': trader.name,
+                'style': trader.style,
+                'message': response,
+                'timestamp': datetime.now().strftime("%H:%M")
+            })
+        disc_state['round'] += 1
+        st.rerun()
+
     col_input, col_action = st.columns([3, 1])
 
     with col_input:
