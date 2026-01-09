@@ -563,24 +563,39 @@ def get_score_interpretation(scores: SnowflakeScores) -> Dict[str, str]:
 
 def get_overall_rating(scores: SnowflakeScores) -> Tuple[str, str, str]:
     """
-    종합 등급 및 설명 반환
+    종합 등급 및 설명 반환 - 중앙화된 설정 사용
 
     Returns:
         (등급, 이모지, 설명)
     """
     total = scores.total
 
-    if total >= 5.0:
+    # 중앙화된 등급 기준 사용
+    if _USE_CENTRAL_CONFIG:
+        grade_a_plus = SNOWFLAKE.grade_a_plus
+        grade_a = SNOWFLAKE.grade_a
+        grade_b = SNOWFLAKE.grade_b
+        grade_c = SNOWFLAKE.grade_c
+        grade_d = SNOWFLAKE.grade_d
+    else:
+        # 폴백: 기본값
+        grade_a_plus = 5.0
+        grade_a = 4.0
+        grade_b = 3.5
+        grade_c = 3.0
+        grade_d = 2.5
+
+    if total >= grade_a_plus:
         return "A+", "⭐", "최우수 - 모든 지표가 뛰어남"
-    elif total >= 4.5:
+    elif total >= grade_a + 0.5:  # 4.5
         return "A", "🟢", "우수 - 대부분의 지표가 양호"
-    elif total >= 4.0:
+    elif total >= grade_a:  # 4.0
         return "B+", "🔵", "양호 - 전반적으로 괜찮음"
-    elif total >= 3.5:
+    elif total >= grade_b:  # 3.5
         return "B", "🔵", "보통 이상 - 일부 강점 보유"
-    elif total >= 3.0:
+    elif total >= grade_c:  # 3.0
         return "C+", "🟡", "보통 - 평균 수준"
-    elif total >= 2.5:
+    elif total >= grade_d:  # 2.5
         return "C", "🟡", "보통 이하 - 개선 필요"
     elif total >= 2.0:
         return "D", "🟠", "주의 - 여러 약점 존재"

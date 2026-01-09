@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 import sys
 import os
 import io
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 상위 디렉토리 import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -715,19 +716,25 @@ def render_integrated_stock_analysis():
                 current_stock = {'code': selected_code, 'name': selected_name, 'scores': scores}
                 comparison_list = [current_stock]
 
-                # 비교 종목 입력
-                comp_cols = st.columns([3, 1])
+                # 비교 종목 입력 (개별 + 일괄)
+                comp_cols = st.columns([2, 1, 2])
                 with comp_cols[0]:
                     comp_input = st.text_input(
-                        "비교 종목 추가 (코드 또는 종목명)",
-                        placeholder="예: 000660, SK하이닉스",
+                        "종목 추가",
+                        placeholder="종목명 또는 코드",
                         key="comp_stock_input"
                     )
                 with comp_cols[1]:
                     add_comp = st.button("➕ 추가", key="add_comparison", use_container_width=True)
+                with comp_cols[2]:
+                    bulk_input = st.text_input(
+                        "일괄 추가 (쉼표 구분)",
+                        placeholder="삼성전자, SK하이닉스, LG에너지솔루션",
+                        key="bulk_comp_input"
+                    )
 
                 if add_comp and comp_input:
-                    # 종목 검색 및 추가
+                    # 종목 검색 및 추가 (단일)
                     try:
                         from korea.krx_data import KRXDataCollector
                         krx = KRXDataCollector()
@@ -750,6 +757,49 @@ def render_integrated_stock_analysis():
                                         st.rerun()
                     except Exception as e:
                         st.error(f"종목 추가 실패: {e}")
+
+                # 일괄 추가 (병렬 로딩)
+                if bulk_input:
+                    bulk_names = [n.strip() for n in bulk_input.split(',') if n.strip()]
+                    if bulk_names and st.button("🚀 일괄 추가 실행", key="bulk_add_btn"):
+                        with st.spinner(f"{len(bulk_names)}개 종목 병렬 로딩 중..."):
+                            try:
+                                from korea.krx_data import KRXDataCollector
+                                krx = KRXDataCollector()
+                                stock_list = krx.get_stock_list('ALL')
+
+                                # 종목 코드 찾기
+                                stocks_to_load = []
+                                existing_codes = [s['code'] for s in st.session_state[comparison_key]]
+                                existing_codes.append(selected_code)  # 현재 종목 제외
+
+                                for name in bulk_names:
+                                    mask = (stock_list['name'].str.contains(name, case=False, na=False) |
+                                            stock_list['code'].str.contains(name, na=False))
+                                    matches = stock_list[mask]
+                                    if not matches.empty:
+                                        match = matches.iloc[0]
+                                        if match['code'] not in existing_codes:
+                                            stocks_to_load.append({
+                                                'code': match['code'],
+                                                'name': match['name']
+                                            })
+
+                                # 병렬 로딩
+                                if stocks_to_load:
+                                    loaded = _load_stock_data_parallel(stocks_to_load)
+                                    for stock in loaded:
+                                        st.session_state[comparison_key].append({
+                                            'code': stock['code'],
+                                            'name': stock['name'],
+                                            'scores': stock['scores']
+                                        })
+                                    st.success(f"{len(loaded)}개 종목이 추가되었습니다")
+                                    st.rerun()
+                                else:
+                                    st.warning("추가할 새 종목이 없습니다")
+                            except Exception as e:
+                                st.error(f"일괄 추가 실패: {e}")
 
                 # 비교 목록 표시 및 삭제
                 if st.session_state[comparison_key]:
@@ -816,7 +866,7 @@ def render_integrated_stock_analysis():
                         )
                         st.plotly_chart(fig, use_container_width=True)
 
-                        # 비교 CSV 내보내기
+                                # 비교 CSV/Excel 내보내기
                         comp_export_data = []
                         for stock in comparison_list:
                             s = stock['scores']
@@ -834,13 +884,28 @@ def render_integrated_stock_analysis():
                         comp_csv_buffer = io.StringIO()
                         comp_export_df.to_csv(comp_csv_buffer, index=False, encoding='utf-8-sig')
 
-                        st.download_button(
-                            label="📥 비교 결과 CSV 다운로드",
-                            data=comp_csv_buffer.getvalue(),
-                            file_name=f"comparison_{datetime.now().strftime('%Y%m%d')}.csv",
-                            mime="text/csv",
-                            use_container_width=True
-                        )
+                        export_cols = st.columns(2)
+                        with export_cols[0]:
+                            st.download_button(
+                                label="📥 CSV 다운로드",
+                                data=comp_csv_buffer.getvalue(),
+                                file_name=f"comparison_{datetime.now().strftime('%Y%m%d')}.csv",
+                                mime="text/csv",
+                                use_container_width=True
+                            )
+                        with export_cols[1]:
+                            # Excel 내보내기
+                            excel_data = _export_to_excel(comparison_list, "comparison")
+                            if excel_data:
+                                st.download_button(
+                                    label="📊 Excel 다운로드",
+                                    data=excel_data,
+                                    file_name=f"comparison_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True
+                                )
+                            else:
+                                st.caption("Excel 내보내기: openpyxl 필요")
 
                 # 포트폴리오 분석 섹션
                 st.markdown("---")
@@ -870,14 +935,14 @@ def render_integrated_stock_analysis():
                             delta_color = "normal" if value >= 3.5 else "inverse"
                             st.metric(label, f"{value:.1f}", delta=None)
 
-                    # 포트폴리오 등급
-                    if avg_total >= 5.0:
+                    # 포트폴리오 등급 (중앙화된 설정 사용)
+                    if avg_total >= SNOWFLAKE.grade_a_plus:
                         port_grade = "A+"
-                    elif avg_total >= 4.0:
+                    elif avg_total >= SNOWFLAKE.grade_a:
                         port_grade = "A"
-                    elif avg_total >= 3.5:
+                    elif avg_total >= SNOWFLAKE.grade_b:
                         port_grade = "B"
-                    elif avg_total >= 3.0:
+                    elif avg_total >= SNOWFLAKE.grade_c:
                         port_grade = "C"
                     else:
                         port_grade = "D"
@@ -890,6 +955,10 @@ def render_integrated_stock_analysis():
                         st.warning(f"포트폴리오 등급: **{port_grade}** - 종목 재검토를 권장합니다")
                 else:
                     st.info("비교 종목을 추가하면 포트폴리오 분석이 가능합니다")
+
+                # 캐시 통계 UI
+                st.markdown("---")
+                _render_cache_stats()
 
         else:
             st.warning(f"{selected_name} 분석 데이터를 불러올 수 없습니다.")
@@ -1032,6 +1101,191 @@ def _get_stock_fundamentals_for_snowflake(code: str) -> Optional[Dict]:
         'net_margin': 1 + (code_hash % 15),  # 1~16
         'data_source': 'fallback',  # 폴백 데이터 사용 표시
     }
+
+
+def _load_stock_data_parallel(stock_codes: List[Dict[str, str]]) -> List[Dict]:
+    """
+    병렬로 여러 종목의 데이터를 로드
+
+    Args:
+        stock_codes: [{'code': '005930', 'name': '삼성전자'}, ...]
+
+    Returns:
+        [{'code': '...', 'name': '...', 'scores': SnowflakeScores, 'data': {...}}, ...]
+    """
+    results = []
+
+    def load_single_stock(stock_info):
+        code = stock_info['code']
+        name = stock_info['name']
+        try:
+            data = _get_stock_fundamentals_for_snowflake(code)
+            if data and SNOWFLAKE_ANALYSIS_AVAILABLE:
+                scores = snowflake_analyzer.calculate_scores(fundamentals=data, sector='default')
+                return {
+                    'code': code,
+                    'name': name,
+                    'scores': scores,
+                    'data': data
+                }
+        except Exception as e:
+            pass
+        return None
+
+    # ThreadPoolExecutor로 병렬 처리
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_stock = {
+            executor.submit(load_single_stock, stock): stock
+            for stock in stock_codes
+        }
+
+        for future in as_completed(future_to_stock):
+            result = future.result()
+            if result:
+                results.append(result)
+
+    return results
+
+
+def _export_to_excel(data_list: List[Dict], filename: str) -> Optional[bytes]:
+    """
+    분석 결과를 Excel 파일로 내보내기
+
+    Args:
+        data_list: [{'code': '...', 'name': '...', 'scores': SnowflakeScores}, ...]
+        filename: 파일명
+
+    Returns:
+        Excel 파일 바이트 또는 None (openpyxl 미설치 시)
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.chart import RadarChart, Reference
+        import tempfile
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Snowflake 분석"
+
+        # 헤더 스타일
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center")
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # 헤더 작성
+        headers = ['종목코드', '종목명', '가치', '미래', '과거', '배당', '건전성', '종합점수', '등급']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+
+        # 데이터 작성
+        for row_idx, stock in enumerate(data_list, 2):
+            scores = stock['scores']
+            grade, _, _ = get_overall_rating(scores)
+
+            values = [
+                stock['code'],
+                stock['name'],
+                round(scores.value, 2),
+                round(scores.future, 2),
+                round(scores.past, 2),
+                round(scores.dividend, 2),
+                round(scores.health, 2),
+                round(scores.total, 2),
+                grade
+            ]
+
+            for col, value in enumerate(values, 1):
+                cell = ws.cell(row=row_idx, column=col, value=value)
+                cell.border = thin_border
+                cell.alignment = Alignment(horizontal="center")
+
+                # 점수에 따른 색상
+                if col in [3, 4, 5, 6, 7, 8] and isinstance(value, (int, float)):
+                    if value >= 4.0:
+                        cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                    elif value < 2.5:
+                        cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+
+        # 열 너비 조정
+        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['B'].width = 15
+        for col in ['C', 'D', 'E', 'F', 'G', 'H', 'I']:
+            ws.column_dimensions[col].width = 10
+
+        # 요약 시트 추가
+        ws_summary = wb.create_sheet("요약")
+        ws_summary['A1'] = "분석 요약"
+        ws_summary['A1'].font = Font(bold=True, size=14)
+
+        ws_summary['A3'] = f"분석 종목 수: {len(data_list)}"
+        ws_summary['A4'] = f"분석 일시: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+
+        if data_list:
+            avg_total = sum(s['scores'].total for s in data_list) / len(data_list)
+            ws_summary['A6'] = f"평균 종합점수: {avg_total:.2f}"
+
+            # 등급별 분포
+            grades = {}
+            for stock in data_list:
+                grade, _, _ = get_overall_rating(stock['scores'])
+                grades[grade] = grades.get(grade, 0) + 1
+
+            ws_summary['A8'] = "등급 분포:"
+            row = 9
+            for grade, count in sorted(grades.items()):
+                ws_summary[f'A{row}'] = f"  {grade}: {count}개"
+                row += 1
+
+        # 파일 저장
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            wb.save(tmp.name)
+            tmp.seek(0)
+            with open(tmp.name, 'rb') as f:
+                return f.read()
+
+    except ImportError:
+        return None
+    except Exception as e:
+        import logging
+        logging.error(f"Excel 내보내기 실패: {e}")
+        return None
+
+
+def _render_cache_stats():
+    """캐시 통계 UI 렌더링"""
+    try:
+        cache = get_memory_cache()
+        stats = cache.get_stats()
+
+        with st.expander("📊 캐시 통계", expanded=False):
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("캐시 크기", f"{stats['size']}/{stats['max_size']}")
+            with col2:
+                st.metric("적중률", stats['hit_rate'])
+            with col3:
+                st.metric("퇴출 횟수", stats['evictions'])
+
+            st.caption(f"적중: {stats['hits']} | 미스: {stats['misses']}")
+
+            if st.button("🗑️ 캐시 초기화", key="clear_cache"):
+                cache.clear()
+                st.success("캐시가 초기화되었습니다")
+                st.rerun()
+    except Exception as e:
+        pass  # 캐시 통계 표시 실패 시 조용히 무시
 
 
 def render_catalyst_compact():
