@@ -21,9 +21,26 @@ class SnowflakeScores:
 
     @property
     def total(self) -> float:
-        """종합 점수 (평균)"""
+        """종합 점수 (가중 평균) - 건전성/가치 비중 높임"""
+        # 기본 가중치: 건전성(25%), 가치(25%), 미래(20%), 과거(20%), 배당(10%)
+        weights = {'value': 0.25, 'future': 0.20, 'past': 0.20,
+                   'dividend': 0.10, 'health': 0.25}
+        return (self.value * weights['value'] +
+                self.future * weights['future'] +
+                self.past * weights['past'] +
+                self.dividend * weights['dividend'] +
+                self.health * weights['health'])
+
+    @property
+    def total_simple(self) -> float:
+        """종합 점수 (단순 평균)"""
         return (self.value + self.future + self.past +
                 self.dividend + self.health) / 5
+
+    @property
+    def min_score(self) -> float:
+        """최저 점수 (약점 파악용)"""
+        return min(self.value, self.future, self.past, self.dividend, self.health)
 
     def to_dict(self) -> Dict[str, float]:
         return {

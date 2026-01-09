@@ -629,19 +629,19 @@ class KRXDataCollector:
         return None
 
     def _get_sample_index_data(self, index_name: str, days: int) -> pd.DataFrame:
-        """샘플 지수 데이터 (2025년 1월 기준)"""
+        """샘플 지수 데이터 (2026년 1월 기준, 실제 데이터 아님)"""
         import numpy as np
 
         dates = pd.date_range(end=datetime.now(), periods=days, freq='B')
 
-        # 2025년 1월 기준 지수 값
+        # 2026년 1월 기준 지수 값 (업데이트됨)
         base_values = {
-            'KOSPI': 2400,
-            'KOSDAQ': 680,
-            'KOSPI200': 320,
-            'KRX100': 4800,
+            'KOSPI': 2550,
+            'KOSDAQ': 750,
+            'KOSPI200': 340,
+            'KRX100': 5100,
         }
-        base = base_values.get(index_name, 2400)
+        base = base_values.get(index_name, 2550)
 
         np.random.seed(42)
         returns = np.random.randn(days) * 0.01

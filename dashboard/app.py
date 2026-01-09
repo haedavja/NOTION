@@ -530,7 +530,15 @@ def render_integrated_stock_analysis():
 
             # 종목 헤더
             st.markdown(f"## {emoji} {selected_name} ({selected_code})")
-            st.caption(f"종합 등급: **{grade}** | {description}")
+
+            # 데이터 출처 표시
+            data_source = stock_data.get('data_source', 'unknown')
+            if data_source == 'real':
+                st.caption(f"종합 등급: **{grade}** | {description} | 📡 실시간 데이터")
+            elif data_source == 'estimated':
+                st.caption(f"종합 등급: **{grade}** | {description} | ⚠️ 일부 추정 데이터")
+            else:
+                st.caption(f"종합 등급: **{grade}** | {description} | ❓ 샘플 데이터")
 
             # 탭으로 분석 영역 구분
             tab1, tab2, tab3 = st.tabs(["❄️ Snowflake 분석", "💬 전문가 토론", "📝 투자논리 검증"])
@@ -633,7 +641,12 @@ def render_snowflake_compact():
 
 
 def _get_stock_fundamentals_for_snowflake(code: str) -> Optional[Dict]:
-    """Snowflake 분석용 펀더멘털 데이터 조회 - 실제 데이터 기반"""
+    """
+    Snowflake 분석용 펀더멘털 데이터 조회 - 실제 데이터 기반
+
+    Returns:
+        Dict with 'data_source' key: 'real' (실제 데이터) or 'estimated' (추정/폴백)
+    """
     try:
         from korea.korean_stocks import KoreanStockAnalyzer
         from pykrx import stock
@@ -649,6 +662,9 @@ def _get_stock_fundamentals_for_snowflake(code: str) -> Optional[Dict]:
         per = fundamentals.per if fundamentals.per and fundamentals.per > 0 else None
         pbr = fundamentals.pbr if fundamentals.pbr and fundamentals.pbr > 0 else None
         div_yield = fundamentals.dividend_yield if fundamentals.dividend_yield else 0
+
+        # 데이터 품질 판단: PER, PBR 둘 다 있으면 실제 데이터
+        has_real_data = per is not None and pbr is not None
 
         # ROE 계산: EPS/BPS * 100 (가능한 경우)
         roe = None
@@ -730,6 +746,7 @@ def _get_stock_fundamentals_for_snowflake(code: str) -> Optional[Dict]:
             'earnings_growth': max(-50, min(100, earnings_growth)),
             'operating_margin': operating_margin,
             'net_margin': net_margin,
+            'data_source': 'real' if has_real_data else 'estimated',
         }
 
     except Exception as e:
@@ -750,6 +767,7 @@ def _get_stock_fundamentals_for_snowflake(code: str) -> Optional[Dict]:
         'earnings_growth': -15 + (code_hash % 40),  # -15~25
         'operating_margin': 3 + (code_hash % 20),  # 3~23
         'net_margin': 1 + (code_hash % 15),  # 1~16
+        'data_source': 'fallback',  # 폴백 데이터 사용 표시
     }
 
 
