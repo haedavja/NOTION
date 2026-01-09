@@ -372,6 +372,8 @@ def generate_sns_market_discussion(
     from_high = metrics.get('from_high', 0)
     trend = condition.get('trend', '혼조세')
     volatility = metrics.get('volatility', 20)
+    ma20 = metrics.get('ma20', 0)
+    ma60 = metrics.get('ma60', 0)
 
     # 1. 강세론자의 의견
     bull = TRADER_PERSONAS['bull_master']
@@ -380,16 +382,34 @@ def generate_sns_market_discussion(
         if metrics.get('above_ma60'):
             bull_msg += "60일선 위에서 탄탄하게 지지받고 있고, 이 흐름 당분간 계속될 듯. "
         bull_msg += "조정 오면 그게 매수 기회입니다! 💪"
+        bull_validity = "2~4주"
+        bull_conditions = [
+            f"60일선({ma60:,.0f}) 이탈 시 재검토 필요",
+            "RSI 70 초과 시 단기 과열 주의",
+            "거래량 급감 시 추세 약화 가능"
+        ]
+        bull_invalidate = f"지수가 {ma60:,.0f} 아래로 3일 연속 마감 시"
     else:
         bull_msg = f"한달간 {return_1m:.1f}%... 아직 걱정할 단계 아닙니다. "
         bull_msg += "오히려 저가 매수 기회로 봐야죠. 좋은 기업은 결국 오릅니다! 🎯"
+        bull_validity = "1~3개월 (장기 관점)"
+        bull_conditions = [
+            "추가 하락 시 분할매수 기회",
+            "펀더멘털 훼손 없어야 유효",
+            "경기침체 신호 시 재검토"
+        ]
+        bull_invalidate = "경기침체 공식 선언 또는 기업 실적 -20% 이상 감소 시"
 
     posts.append({
         'persona': bull,
         'message': bull_msg,
         'timestamp': '방금 전',
         'likes': np.random.randint(50, 200),
-        'comments': np.random.randint(10, 50)
+        'comments': np.random.randint(10, 50),
+        'validity': bull_validity,
+        'conditions': bull_conditions,
+        'invalidate': bull_invalidate,
+        'confidence': 75 if return_1m > 0 else 60
     })
 
     # 2. 신중파의 반박
@@ -397,40 +417,90 @@ def generate_sns_market_discussion(
     if rsi > 65:
         bear_msg = f"잠깐, RSI가 {rsi:.0f}이에요. 과열 신호 아닌가요? 🤔 "
         bear_msg += "고점에서 물리면 손실 회복하는데 몇 년 걸릴 수 있어요. "
+        bear_validity = "1~2주 (단기 조정 예상)"
+        bear_conditions = [
+            f"RSI가 {rsi:.0f}에서 50 이하로 하락 시 조정 완료",
+            "거래량 동반 하락 시 신뢰도 상승",
+            "지지선 테스트 후 반등 가능"
+        ]
+        bear_invalidate = "RSI가 50 이하로 안정화되고 거래량 정상화 시"
     elif from_high > -10:
         bear_msg = f"52주 고점 대비 {abs(from_high):.1f}%밖에 안 빠졌어요. "
         bear_msg += "여기서 추격매수는 위험합니다. 조정 기다리세요! ⚠️"
+        bear_validity = "2~4주"
+        bear_conditions = [
+            f"고점 대비 -15% 이상 조정 시 매수 검토",
+            "거래량 증가 없이 상승 시 신뢰도 낮음",
+            "외국인 순매수 전환 시 재검토"
+        ]
+        bear_invalidate = "신고가 돌파 후 3일 연속 안착 시"
     else:
         bear_msg = f"많이 빠진 건 맞는데... 더 빠질 수도 있어요. "
         bear_msg += f"변동성이 {volatility:.0f}%나 되는데 섣불리 들어가면 안됩니다."
+        bear_validity = "상황에 따라 유동적"
+        bear_conditions = [
+            f"변동성 {volatility:.0f}%가 20% 이하로 안정화 필요",
+            "패닉셀링 종료 신호 확인 후 진입",
+            "기술적 반등 신호 대기"
+        ]
+        bear_invalidate = f"변동성 20% 이하 + 20일선 회복 시"
 
     posts.append({
         'persona': bear,
         'message': bear_msg,
         'timestamp': '2분 전',
         'likes': np.random.randint(30, 150),
-        'comments': np.random.randint(15, 60)
+        'comments': np.random.randint(15, 60),
+        'validity': bear_validity,
+        'conditions': bear_conditions,
+        'invalidate': bear_invalidate,
+        'confidence': 70 if rsi > 65 else 55
     })
 
     # 3. 차트장인의 기술적 분석
     tech = TRADER_PERSONAS['tech_guru']
     if metrics.get('above_ma20') and metrics.get('above_ma60'):
         tech_msg = f"차트로 보면 명확합니다! 📊 "
-        tech_msg += f"20일선({metrics.get('ma20', 0):,.0f}) 위, 60일선({metrics.get('ma60', 0):,.0f}) 위. "
+        tech_msg += f"20일선({ma20:,.0f}) 위, 60일선({ma60:,.0f}) 위. "
         tech_msg += "정배열 상태에서 추세 추종이 답입니다. "
+        tech_validity = "정배열 유지 시 계속 유효"
+        tech_conditions = [
+            f"20일선({ma20:,.0f}) 지지 확인 시 추가 매수 가능",
+            "골든크로스 발생 시 신뢰도 상승",
+            "거래량 증가 동반 시 강한 신호"
+        ]
+        tech_invalidate = f"20일선({ma20:,.0f}) 하향 이탈 + 데드크로스 발생 시"
     elif not metrics.get('above_ma20'):
         tech_msg = f"20일선 이탈했네요... 단기 약세 신호입니다. "
-        tech_msg += f"지지선 {metrics.get('ma60', 0):,.0f} 지켜보세요. 이거 깨지면 손절 고려해야 해요."
+        tech_msg += f"지지선 {ma60:,.0f} 지켜보세요. 이거 깨지면 손절 고려해야 해요."
+        tech_validity = "60일선 테스트 완료까지 (1~2주)"
+        tech_conditions = [
+            f"60일선({ma60:,.0f}) 지지 성공 시 반등 기대",
+            "음봉 축소 + 거래량 감소 = 매도 압력 소진",
+            "RSI 30 근처에서 반등 시그널 대기"
+        ]
+        tech_invalidate = f"60일선({ma60:,.0f}) 반등 후 20일선 회복 시"
     else:
         tech_msg = "이평선 혼조... 방향성이 애매합니다. "
         tech_msg += "확실한 시그널 나올 때까지 관망이 좋겠어요. 🧐"
+        tech_validity = "방향성 확정까지 (수일~1주)"
+        tech_conditions = [
+            "정배열 또는 역배열 확정 시 방향 결정",
+            "거래량 터지는 방향으로 추종",
+            "박스권 상단/하단 돌파 시 진입"
+        ]
+        tech_invalidate = "이평선 정렬 완료 시 새로운 분석 필요"
 
     posts.append({
         'persona': tech,
         'message': tech_msg,
         'timestamp': '5분 전',
         'likes': np.random.randint(80, 250),
-        'comments': np.random.randint(20, 80)
+        'comments': np.random.randint(20, 80),
+        'validity': tech_validity,
+        'conditions': tech_conditions,
+        'invalidate': tech_invalidate,
+        'confidence': 80 if metrics.get('above_ma20') and metrics.get('above_ma60') else 50
     })
 
     # 4. 거시경제 전문가
@@ -439,20 +509,52 @@ def generate_sns_market_discussion(
         macro_msg = f"경기 사이클 관점에서 보면 지금은 **{phase}** 국면입니다. "
         if '확장' in phase:
             macro_msg += "확장기엔 주식 비중 늘려도 됩니다. 금리 동향만 주시하세요. "
+            macro_validity = "3~6개월 (경기 사이클 기준)"
+            macro_conditions = [
+                "금리 인상 기조 전환 시 재검토",
+                "PMI 지수 50 이하 진입 시 경계",
+                "실업률 상승 추세 시 방어적 전환"
+            ]
+            macro_invalidate = "중앙은행 긴축 강화 또는 경기선행지수 3개월 연속 하락 시"
         elif '수축' in phase:
             macro_msg += "수축기 진입... 방어주 위주로 리밸런싱 고려하세요. "
+            macro_validity = "6~12개월 (수축기 평균 기간)"
+            macro_conditions = [
+                "금리 인하 시작 시 회복 기대",
+                "기업실적 바닥 신호 확인 필요",
+                "정부 경기부양책 발표 시 전환점"
+            ]
+            macro_invalidate = "금리 인하 + 경기선행지수 반등 시"
         else:
             macro_msg += "회복기 초입이면 성장주 선취매도 나쁘지 않습니다. "
+            macro_validity = "6~12개월 (회복기 초입)"
+            macro_conditions = [
+                "기업실적 턴어라운드 확인 시 신뢰도 상승",
+                "소비지표 개선 지속 필요",
+                "고용지표 안정화 확인"
+            ]
+            macro_invalidate = "경기 더블딥 신호 또는 인플레이션 재상승 시"
     else:
         macro_msg = "거시경제 지표들 보면 당분간 횡보장 예상됩니다. "
         macro_msg += "금리 인하 시그널 나올 때까지 기다려보는 것도 전략이에요. 🎓"
+        macro_validity = "금리 정책 변화까지 (1~3개월)"
+        macro_conditions = [
+            "중앙은행 스탠스 변화 시 재평가",
+            "인플레이션 2% 근접 시 완화 기대",
+            "고용지표 악화 시 금리 인하 앞당겨질 수 있음"
+        ]
+        macro_invalidate = "금리 인하 사이클 시작 또는 인플레 급등 시"
 
     posts.append({
         'persona': macro,
         'message': macro_msg,
         'timestamp': '8분 전',
         'likes': np.random.randint(100, 300),
-        'comments': np.random.randint(25, 100)
+        'comments': np.random.randint(25, 100),
+        'validity': macro_validity,
+        'conditions': macro_conditions,
+        'invalidate': macro_invalidate,
+        'confidence': 65
     })
 
     # 5. 개미투자자의 현실적 의견
@@ -467,16 +569,32 @@ def generate_sns_market_discussion(
     if return_1w < 0:
         retail_msg += f"이번주만 {return_1w:.1f}%... 월급 다 녹았어요. 😭 "
         retail_msg += "근데 전문가분들 말 들으면서 공부하고 있습니다!"
+        retail_validity = "개인적 감상 (투자 조언 아님)"
+        retail_conditions = [
+            "손절/익절 원칙 준수 중",
+            "분할매수로 평단가 관리",
+            "장기 투자로 마인드 전환 중"
+        ]
     else:
         retail_msg += "그래도 이번주는 조금 회복해서 다행이에요. "
         retail_msg += "소액으로 분할매수 중입니다! 화이팅! 💪"
+        retail_validity = "개인적 감상 (투자 조언 아님)"
+        retail_conditions = [
+            "목표 수익률 도달 시 부분 익절 예정",
+            "손절가 설정 완료",
+            "여유자금으로만 투자 중"
+        ]
 
     posts.append({
         'persona': retail,
         'message': retail_msg,
         'timestamp': '12분 전',
         'likes': np.random.randint(200, 500),
-        'comments': np.random.randint(50, 150)
+        'comments': np.random.randint(50, 150),
+        'validity': retail_validity,
+        'conditions': retail_conditions,
+        'invalidate': "개인 상황에 따라 다름",
+        'confidence': None  # 개인 의견이므로 신뢰도 없음
     })
 
     # 6. 퀀트봇의 데이터 분석
@@ -502,24 +620,41 @@ def generate_sns_market_discussion(
 
     if score >= 70:
         quant_msg += "📗 매수 우위 시그널"
+        quant_signal = "매수 우위"
     elif score >= 50:
         quant_msg += "📒 중립 시그널"
+        quant_signal = "중립"
     else:
         quant_msg += "📕 매도 우위 시그널"
+        quant_signal = "매도 우위"
 
     posts.append({
         'persona': quant,
         'message': quant_msg,
         'timestamp': '15분 전',
         'likes': np.random.randint(150, 400),
-        'comments': np.random.randint(30, 100)
+        'comments': np.random.randint(30, 100),
+        'validity': "실시간 업데이트 (데이터 변경 시 즉시 반영)",
+        'conditions': [
+            f"RSI: 현재 {rsi:.1f} → 30 이하 시 과매도, 70 이상 시 과매수",
+            f"이평선: 20일선 {'위 ✓' if metrics.get('above_ma20') else '아래 ✗'} / 60일선 {'위 ✓' if metrics.get('above_ma60') else '아래 ✗'}",
+            f"변동성: {volatility:.1f}% → 30% 초과 시 고위험 경고"
+        ],
+        'invalidate': "점수 구간 변경 시 시그널 자동 전환",
+        'confidence': score,
+        'score_breakdown': {
+            '20일선 위': 10 if metrics.get('above_ma20') else 0,
+            '60일선 위': 10 if metrics.get('above_ma60') else 0,
+            '월간 양봉': 10 if return_1m > 0 else 0,
+            'RSI 정상범위': (5 if rsi < 70 else 0) + (5 if rsi > 30 else 0)
+        }
     })
 
     return posts
 
 
 def render_sns_discussion(posts: List[Dict]):
-    """SNS 스타일 토론 UI 렌더링"""
+    """SNS 스타일 토론 UI 렌더링 (유효기간/조건 포함)"""
     st.markdown("""
     <style>
     .sns-post {
@@ -527,7 +662,7 @@ def render_sns_discussion(posts: List[Dict]):
         border: 1px solid #e5e7eb;
         border-radius: 12px;
         padding: 1rem;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     .sns-header {
@@ -563,11 +698,71 @@ def render_sns_discussion(posts: List[Dict]):
         color: #6b7280;
         font-size: 0.85rem;
     }
+    .validity-badge {
+        display: inline-block;
+        background: #dbeafe;
+        color: #1e40af;
+        padding: 0.2rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        margin-right: 0.5rem;
+    }
+    .confidence-badge {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+    }
+    .detail-section {
+        background: #f9fafb;
+        border-radius: 8px;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+    }
+    .condition-item {
+        padding: 0.3rem 0;
+        border-bottom: 1px dashed #e5e7eb;
+    }
+    .condition-item:last-child {
+        border-bottom: none;
+    }
+    .invalidate-box {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 6px;
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        font-size: 0.8rem;
+        color: #991b1b;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-    for post in posts:
+    for idx, post in enumerate(posts):
         persona = post['persona']
+        confidence = post.get('confidence')
+        validity = post.get('validity', '')
+        conditions = post.get('conditions', [])
+        invalidate = post.get('invalidate', '')
+        score_breakdown = post.get('score_breakdown', {})
+
+        # 신뢰도 배지 색상
+        if confidence is not None:
+            if confidence >= 70:
+                conf_color = '#22c55e'
+                conf_bg = '#dcfce7'
+            elif confidence >= 50:
+                conf_color = '#eab308'
+                conf_bg = '#fef9c3'
+            else:
+                conf_color = '#ef4444'
+                conf_bg = '#fee2e2'
+            conf_badge = f"<span class='confidence-badge' style='background: {conf_bg}; color: {conf_color};'>신뢰도 {confidence}%</span>"
+        else:
+            conf_badge = ""
+
+        # 메인 포스트 렌더링
         st.markdown(f"""
         <div class='sns-post' style='border-left: 4px solid {persona["color"]};'>
             <div class='sns-header'>
@@ -579,6 +774,10 @@ def render_sns_discussion(posts: List[Dict]):
                 <span class='sns-time'>{post["timestamp"]}</span>
             </div>
             <div class='sns-message'>{post["message"]}</div>
+            <div style='margin: 0.5rem 0;'>
+                <span class='validity-badge'>⏱️ 유효기간: {validity}</span>
+                {conf_badge}
+            </div>
             <div class='sns-actions'>
                 <span>❤️ {post["likes"]}</span>
                 <span>💬 {post["comments"]}</span>
@@ -586,6 +785,42 @@ def render_sns_discussion(posts: List[Dict]):
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # 상세 정보 expander
+        with st.expander(f"📋 {persona['name']}의 논리 상세 보기", expanded=False):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**⏱️ 유효기간**")
+                st.info(validity if validity else "명시되지 않음")
+
+                if confidence is not None:
+                    st.markdown("**📊 신뢰도**")
+                    st.progress(confidence / 100)
+                    st.caption(f"{confidence}% 신뢰도")
+
+            with col2:
+                st.markdown("**✅ 유효 조건**")
+                if conditions:
+                    for cond in conditions:
+                        st.markdown(f"• {cond}")
+                else:
+                    st.caption("조건 없음")
+
+            # 점수 breakdown (퀀트봇의 경우)
+            if score_breakdown:
+                st.markdown("**🔢 점수 구성**")
+                breakdown_cols = st.columns(len(score_breakdown))
+                for i, (key, val) in enumerate(score_breakdown.items()):
+                    with breakdown_cols[i]:
+                        st.metric(key, f"+{val}" if val > 0 else "0")
+
+            # 무효화 조건
+            if invalidate:
+                st.markdown("**🚫 무효화 조건**")
+                st.error(f"⚠️ {invalidate}")
+
+            st.divider()
 
 
 def identify_risks(metrics: Dict, condition: Dict) -> List[Dict]:
