@@ -596,9 +596,10 @@ def generate_sns_market_discussion(
     market_themes: Dict = None
 ) -> List[Dict]:
     """
-    SNS 스타일 시장 토론 생성 - 실시간 테마/뉴스 기반
+    SNS 스타일 시장 토론 생성 - 토론/논쟁 형식
 
-    6개의 트레이더 페르소나가 실제 시장 테마와 뉴스를 근거로 의견을 제시합니다.
+    트레이더들이 특정 주제(테마/종목)에 대해 "오른다 vs 아니다" 형식으로 논쟁합니다.
+    서로를 @멘션하며 반박하는 실제 토론 형태입니다.
 
     Args:
         metrics: 시장 지표 딕셔너리
@@ -609,11 +610,7 @@ def generate_sns_market_discussion(
         market_themes: fetch_market_themes()에서 반환된 테마/뉴스 데이터
 
     Returns:
-        List[Dict]: 포스트 리스트
-
-    유지보수 노트:
-        - market_themes가 None이면 자동으로 fetch_market_themes() 호출
-        - 각 트레이더는 특정 테마에 대해 근거 있는 의견 제시
+        List[Dict]: 포스트 리스트 (토론 순서대로)
     """
     posts = []
 
@@ -626,250 +623,272 @@ def generate_sns_market_discussion(
     top_search = market_themes.get('top_search', [])
 
     # 주요 지표 추출
-    return_1m = metrics.get('return_1m', 0)
-    return_1w = metrics.get('return_1w', 0)
     rsi = metrics.get('rsi', 50)
     volatility = metrics.get('volatility', 20)
     ma20 = metrics.get('ma20', 0)
     ma60 = metrics.get('ma60', 0)
+    above_ma20 = metrics.get('above_ma20', False)
+    above_ma60 = metrics.get('above_ma60', False)
 
-    # 상승/하락 테마 분리
-    rising_themes = [t for t in hot_themes if t.get('change', 0) > 0][:3]
-    falling_themes = [t for t in hot_themes if t.get('change', 0) < 0][:3]
+    # 토론 주제 선정 (가장 핫한 테마 또는 인기 검색 종목)
+    debate_topic = None
+    debate_stock = None
+    debate_change = 0
 
-    # 1. 강세론자 - 상승 테마에 집중
+    if hot_themes:
+        # 가장 변동폭 큰 테마 선택
+        sorted_themes = sorted(hot_themes, key=lambda x: abs(x.get('change', 0)), reverse=True)
+        if sorted_themes:
+            debate_topic = sorted_themes[0]['name']
+            debate_stock = sorted_themes[0].get('stock', '')
+            debate_change = sorted_themes[0].get('change', 0)
+
+    if not debate_topic and top_search:
+        debate_topic = top_search[0]['name']
+        debate_stock = top_search[0]['name']
+        debate_change = 1.5  # 기본값
+
+    # 폴백
+    if not debate_topic:
+        debate_topic = "AI/반도체"
+        debate_stock = "SK하이닉스"
+        debate_change = 2.0
+
+    # 상승 vs 하락 진영 결정
+    is_rising = debate_change > 0
+
+    # ========== 토론 시작 ==========
+
+    # 1. 강세론자가 주제 제기 (상승 주장)
     bull = TRADER_PERSONAS['bull_master']
-    if rising_themes:
-        top_theme = rising_themes[0]
-        bull_msg = f"오늘 시장 주도 테마는 **{top_theme['name']}** (+{top_theme['change']:.1f}%)! 📈 "
-        if top_theme.get('stock'):
-            bull_msg += f"대장주 {top_theme['stock']} 중심으로 섹터 전체가 움직이고 있어요. "
-        if len(rising_themes) > 1:
-            other_themes = ', '.join([t['name'] for t in rising_themes[1:]])
-            bull_msg += f"{other_themes}도 강세. 수급이 쏠리는 섹터 주목하세요!"
-        bull_conditions = [
-            f"{top_theme['name']} 테마 모멘텀 지속 시 유효",
-            f"대장주 {top_theme.get('stock', '관련주')} 상승 추세 유지 필요",
-            "외국인/기관 동반 매수 시 신뢰도 상승"
-        ]
-        bull_confidence = 75
+    if is_rising:
+        bull_msg = f"🔥 **[토론] {debate_topic}, 추가 상승 간다!**\n\n"
+        bull_msg += f"오늘 +{abs(debate_change):.1f}% 올랐는데, 이게 시작이에요. "
+        if debate_stock:
+            bull_msg += f"{debate_stock} 실적 보세요 - 어닝 서프라이즈 연속이잖아요. "
+        if market_news:
+            bull_msg += f"'{market_news[0][:30]}...' 뉴스도 호재. "
+        bull_msg += "수급도 외국인 순매수 전환 중. **더 오른다**고 봅니다! 🚀"
     else:
-        bull_msg = "뚜렷한 주도 테마는 없지만, 저평가 섹터에서 기회를 찾아보세요. "
-        bull_msg += "시장이 쉬어갈 때가 오히려 공부하고 준비할 때입니다! 💪"
-        bull_conditions = ["섹터 로테이션 신호 대기", "실적 시즌 수혜주 탐색"]
-        bull_confidence = 55
-
-    # 관련 뉴스 언급
-    if market_news and len(market_news) > 0:
-        relevant_news = market_news[0][:50]
-        bull_msg += f" [참고: '{relevant_news}...']"
+        bull_msg = f"🔥 **[토론] {debate_topic}, 바닥 찍고 반등 간다!**\n\n"
+        bull_msg += f"오늘 {debate_change:.1f}% 빠졌지만, 과매도 구간이에요. "
+        if debate_stock:
+            bull_msg += f"{debate_stock} PER 보면 역대 최저 수준. "
+        bull_msg += "악재는 이미 반영됐고, 여기서 **반등**한다고 봅니다! 📈"
 
     posts.append({
         'persona': bull,
         'message': bull_msg,
         'timestamp': '방금 전',
-        'likes': np.random.randint(50, 200),
-        'comments': np.random.randint(10, 50),
+        'likes': np.random.randint(80, 200),
+        'comments': np.random.randint(30, 80),
         'validity': "테마 모멘텀 유지 시 (1~2주)",
-        'conditions': bull_conditions,
-        'invalidate': "주도 테마 급락 또는 섹터 로테이션 발생 시",
-        'confidence': bull_confidence
+        'conditions': [
+            f"{debate_topic} 외국인/기관 수급 지속 시",
+            f"대장주 {debate_stock} 상승 추세 유지",
+            "실적 컨센서스 상회 시 가속"
+        ],
+        'invalidate': "섹터 전체 수급 이탈 또는 악재 발생 시",
+        'confidence': 75 if is_rising else 60,
+        'stance': '📈 상승'
     })
 
-    # 2. 신중파 - 하락 테마 경고
+    # 2. 신중파가 반박 (하락/조심 주장)
     bear = TRADER_PERSONAS['bear_hunter']
-    if falling_themes:
-        worst_theme = falling_themes[0]
-        bear_msg = f"⚠️ **{worst_theme['name']}** 테마 {worst_theme['change']:.1f}% 급락 중. "
-        if worst_theme.get('stock'):
-            bear_msg += f"{worst_theme['stock']} 보유자 주의하세요. "
-        if len(falling_themes) > 1:
-            bear_msg += f"{falling_themes[1]['name']}도 약세. 낙폭 확대 가능성 있습니다."
-        bear_conditions = [
-            f"{worst_theme['name']} 테마 추가 하락 시 손절 검토",
-            "반등 시도 실패하면 비중 축소",
-            "섹터 전체 약세면 개별 종목도 위험"
-        ]
-        bear_confidence = 70
-    elif rsi > 65:
-        bear_msg = f"RSI {rsi:.0f}로 과열 구간. 지금 추격 매수는 위험해요. "
-        bear_msg += "조정 기다렸다가 눌림목에서 진입하는 게 안전합니다."
-        bear_conditions = ["RSI 50 이하로 조정 시 재진입 검토", "거래량 감소 시 매도 압력 소진 확인"]
-        bear_confidence = 65
+    bear_msg = f"@{bull['name']} 잠깐요, 너무 낙관적인 거 아닌가요? 🤔\n\n"
+    if is_rising:
+        bear_msg += f"{debate_topic} 오늘 +{abs(debate_change):.1f}%면 **단기 과열**이에요. "
+        if rsi > 60:
+            bear_msg += f"RSI {rsi:.0f}으로 이미 과매수 진입 중. "
+        bear_msg += "지금 추격 매수하면 고점에 물립니다. "
+        bear_msg += f"'{debate_stock}' 좋은 건 맞는데, **눌림목 기다려야** 합니다! ⚠️"
     else:
-        bear_msg = "특별히 위험한 테마는 없지만, 고점 추격은 피하세요. "
-        bear_msg += "이익 실현 타이밍도 중요합니다."
-        bear_conditions = ["목표가 도달 시 부분 익절", "손절 라인 사전 설정 필수"]
-        bear_confidence = 55
+        bear_msg += f"바닥이라고요? {debate_topic} 아직 **악재 소화 안 됐어요**. "
+        bear_msg += "반도체 업황 회복은 내년 하반기나 돼야 하고, "
+        bear_msg += "지금 받으면 물타기만 하게 됩니다. **더 빠진다**고 봐요! 📉"
 
     posts.append({
         'persona': bear,
         'message': bear_msg,
         'timestamp': '2분 전',
-        'likes': np.random.randint(30, 150),
-        'comments': np.random.randint(15, 60),
-        'validity': "해당 테마 안정화까지 (수일~1주)",
-        'conditions': bear_conditions,
-        'invalidate': "하락 테마 반등 또는 악재 해소 시",
-        'confidence': bear_confidence
+        'likes': np.random.randint(60, 150),
+        'comments': np.random.randint(25, 70),
+        'validity': "과열 해소까지 (수일~2주)",
+        'conditions': [
+            f"RSI {rsi:.0f} → 50 이하 조정 시 재진입 검토",
+            "거래량 감소로 매도 압력 소진 확인",
+            "지지선 테스트 후 반등 확인 필요"
+        ],
+        'invalidate': "조정 없이 신고가 돌파 시",
+        'confidence': 70 if rsi > 60 else 55,
+        'stance': '📉 조정/하락'
     })
 
-    # 3. 차트장인 - 기술적 분석 + 테마 차트
+    # 3. 차트장인이 기술적 근거 제시
     tech = TRADER_PERSONAS['tech_guru']
-    if top_search:
-        hot_stock = top_search[0]
-        tech_msg = f"📊 오늘 인기 검색 1위 **{hot_stock['name']}** ({hot_stock.get('change', '')}). "
-        tech_msg += f"KOSPI는 현재 {'20일선 위 정배열' if metrics.get('above_ma20') else '20일선 이탈 약세'}. "
-        if metrics.get('above_ma20') and metrics.get('above_ma60'):
-            tech_msg += "이평선 정배열에서 인기 테마 종목은 추세 추종 유효합니다."
-            tech_confidence = 75
-        else:
-            tech_msg += "이평선 역배열이라 인기주도 단타 아니면 위험해요. 지지선 확인 필수!"
-            tech_confidence = 55
+    tech_msg = f"둘 다 일리 있어요. 차트로 정리해드릴게요 📊\n\n"
+
+    if above_ma20 and above_ma60:
+        tech_msg += f"**{debate_topic} 기술적 현황:**\n"
+        tech_msg += f"• 20일선({ma20:,.0f}) ✅ 위\n"
+        tech_msg += f"• 60일선({ma60:,.0f}) ✅ 위\n"
+        tech_msg += f"→ 이평선 정배열! @{bull['name']}님 의견에 **한 표**. "
+        tech_msg += "추세 추종 유효합니다. 단, 20일선 이탈하면 손절!"
+        tech_stance = '📈 상승'
+        tech_confidence = 70
+    elif not above_ma20:
+        tech_msg += f"**{debate_topic} 기술적 현황:**\n"
+        tech_msg += f"• 20일선({ma20:,.0f}) ❌ 아래\n"
+        tech_msg += f"• 60일선({ma60:,.0f}) {'✅ 위' if above_ma60 else '❌ 아래'}\n"
+        tech_msg += f"→ 단기 약세! @{bear['name']}님 말대로 **조심**해야 해요. "
+        tech_msg += f"{ma60:,.0f} 지지 확인 후 진입하세요!"
+        tech_stance = '📉 조정/하락'
+        tech_confidence = 60
     else:
-        if metrics.get('above_ma20'):
-            tech_msg = f"차트상 20일선({ma20:,.0f}) 지지 유효. 눌림목 매수 전략 유효합니다."
-            tech_confidence = 70
-        else:
-            tech_msg = f"20일선 이탈 상태. {ma60:,.0f} 지지 테스트 중. 반등 확인 후 진입하세요."
-            tech_confidence = 50
+        tech_msg += "이평선 혼조세라 **방향성 불명확**. "
+        tech_msg += "명확한 시그널 나올 때까지 관망 추천합니다."
+        tech_stance = '⏸️ 관망'
+        tech_confidence = 50
 
     posts.append({
         'persona': tech,
         'message': tech_msg,
         'timestamp': '5분 전',
-        'likes': np.random.randint(80, 250),
-        'comments': np.random.randint(20, 80),
+        'likes': np.random.randint(100, 280),
+        'comments': np.random.randint(35, 90),
         'validity': "이평선 상태 변화 시까지",
         'conditions': [
-            f"20일선({ma20:,.0f}) 지지/돌파 여부 확인",
-            "거래량 동반 여부로 신뢰도 판단",
-            "인기 검색주 단기 변동성 주의"
+            f"20일선({ma20:,.0f}) 지지/이탈 여부가 핵심",
+            "거래량 터지는 방향으로 추종",
+            "손절 라인 미리 설정 필수"
         ],
-        'invalidate': "이평선 정렬 상태 변경 시 재분석 필요",
-        'confidence': tech_confidence
+        'invalidate': "이평선 배열 상태 변경 시",
+        'confidence': tech_confidence,
+        'stance': tech_stance
     })
 
-    # 4. 거시경제 전문가 - 뉴스 기반
+    # 4. 거시경제 전문가가 매크로 관점 추가
     macro = TRADER_PERSONAS['macro_sage']
-    if market_news and len(market_news) > 1:
-        # 뉴스에서 키워드 분석
-        news_text = ' '.join(market_news)
-        keywords = {
-            '금리': '금리', '연준': '연준/Fed', 'Fed': '연준/Fed',
-            '인플레': '인플레이션', '환율': '환율', '달러': '달러',
-            '중국': '중국 경제', '반도체': '반도체 업황', '수출': '수출'
-        }
-        found_keywords = [v for k, v in keywords.items() if k in news_text]
-        found_keywords = list(dict.fromkeys(found_keywords))[:2]  # 중복 제거, 최대 2개
+    macro_msg = f"매크로 관점 추가합니다 🎓\n\n"
 
-        if found_keywords:
-            macro_msg = f"🎓 오늘 시장 핵심은 **{', '.join(found_keywords)}**. "
-            macro_msg += f"'{market_news[0][:40]}...' - 이 뉴스가 시장 방향 좌우할 수 있어요. "
+    # 뉴스에서 매크로 키워드 찾기
+    news_text = ' '.join(market_news) if market_news else ''
+
+    if '금리' in news_text or '연준' in news_text or 'Fed' in news_text:
+        macro_msg += f"**금리 이슈가 핵심입니다.** "
+        macro_msg += f"'{market_news[0][:35]}...' - 이거 주목하세요. "
+        macro_msg += f"금리 방향이 {debate_topic} 밸류에이션에 직접 영향. "
+        if '인하' in news_text or '동결' in news_text:
+            macro_msg += f"@{bull['name']}님 유리한 환경이에요. 유동성 장세 기대!"
+            macro_stance = '📈 상승'
         else:
-            macro_msg = f"📰 주요 뉴스: '{market_news[0][:45]}...' "
-
-        if '금리' in news_text or '연준' in news_text or 'Fed' in news_text:
-            macro_msg += "금리 정책 변화는 시장 전체에 영향. 매크로 이벤트 주시하세요."
-        elif '반도체' in news_text or '수출' in news_text:
-            macro_msg += "한국 수출주 중심으로 영향 예상됩니다."
-        macro_confidence = 70
+            macro_msg += f"@{bear['name']}님 말대로 밸류 부담 있어요."
+            macro_stance = '📉 조정/하락'
+    elif '반도체' in news_text or '수출' in news_text or 'AI' in news_text:
+        macro_msg += f"**{debate_topic} 업황 사이클이 핵심.** "
+        macro_msg += "한국 수출 비중 높은 섹터라 글로벌 수요가 중요해요. "
+        macro_msg += "미국/중국 AI 투자 지속 여부 확인 필요합니다."
+        macro_stance = '⏸️ 중립'
     else:
-        macro_msg = "거시경제 측면에서 당분간 특별한 이벤트는 없어 보입니다. "
-        macro_msg += "개별 종목/섹터 펀더멘털에 집중하세요. 🎓"
-        macro_confidence = 55
+        macro_msg += f"특별한 매크로 이벤트는 없어요. "
+        macro_msg += f"{debate_topic}는 개별 펀더멘털로 판단하시면 됩니다. "
+        macro_msg += "양쪽 다 틀린 말은 아니에요. 본인 리스크 감내 수준에 맞게!"
+        macro_stance = '⏸️ 중립'
 
     posts.append({
         'persona': macro,
         'message': macro_msg,
         'timestamp': '8분 전',
-        'likes': np.random.randint(100, 300),
-        'comments': np.random.randint(25, 100),
-        'validity': "이벤트 소화 시까지 (수일~1주)",
+        'likes': np.random.randint(90, 250),
+        'comments': np.random.randint(30, 85),
+        'validity': "매크로 이벤트 결과까지 (수일~1개월)",
         'conditions': [
-            "매크로 이벤트 결과에 따라 재평가",
-            "금리/환율 급변 시 전략 수정 필요",
-            "대외 변수(미국, 중국) 모니터링"
+            "금리/환율 방향성이 밸류에이션에 영향",
+            "글로벌 경기 선행지표 모니터링",
+            "섹터별 업황 사이클 확인 필요"
         ],
         'invalidate': "새로운 매크로 이벤트 발생 시",
-        'confidence': macro_confidence
+        'confidence': 65,
+        'stance': macro_stance
     })
 
-    # 5. 개미투자자 - 인기 검색종목 기반
+    # 5. 개미투자자가 현실적 질문
     retail = TRADER_PERSONAS['retail_voice']
-    if top_search and len(top_search) > 0:
-        retail_msg = f"다들 **{top_search[0]['name']}** 검색하시네요... 저도 관심 있었는데 😅 "
-        if len(top_search) > 1:
-            retail_msg += f"{top_search[1]['name']}도 핫하고. "
-        retail_msg += "남들 다 살 때 사면 늦는다는데, 판단이 어려워요. "
-        retail_msg += "소액으로 분할매수 해볼까 고민 중입니다!"
-    elif rising_themes:
-        retail_msg = f"{rising_themes[0]['name']} 테마 오른다는데 지금 사도 될까요? "
-        retail_msg += "이미 많이 오른 것 같기도 하고... 전문가분들 의견 참고 중이에요! 😊"
-    else:
-        retail_msg = "오늘 시장 방향을 모르겠어요... "
-        retail_msg += "일단 관망하면서 공부하고 있습니다. 화이팅! 💪"
+    retail_msg = f"전문가분들 토론 잘 봤어요... 근데 솔직히 😅\n\n"
+    retail_msg += f"@{bull['name']}님은 **오른다**, @{bear['name']}님은 **조심**하래요.\n"
+    retail_msg += f"@{tech['name']}님 차트는 {'상승' if tech_stance == '📈 상승' else '애매'}하다고 하시고...\n\n"
+    retail_msg += f"결국 **{debate_topic}** 지금 사도 되는 건가요, 말아야 하는 건가요? 🤷\n"
+    retail_msg += "소액으로 분할매수 해볼까 하는데, 어떻게 생각하세요?"
 
     posts.append({
         'persona': retail,
         'message': retail_msg,
         'timestamp': '12분 전',
-        'likes': np.random.randint(200, 500),
-        'comments': np.random.randint(50, 150),
-        'validity': "개인적 감상 (투자 조언 아님)",
+        'likes': np.random.randint(200, 450),
+        'comments': np.random.randint(60, 150),
+        'validity': "개인적 질문 (투자 조언 아님)",
         'conditions': [
-            "인기 검색주 = 이미 많이 오른 경우 多",
-            "분할매수로 리스크 관리 중",
-            "손절가 미리 설정 필수"
+            "분할매수로 리스크 분산 고려",
+            "손절 라인 미리 설정 필수",
+            "여유자금으로만 투자"
         ],
         'invalidate': "개인 상황에 따라 다름",
-        'confidence': None
+        'confidence': None,
+        'stance': '❓ 질문'
     })
 
-    # 6. 퀀트봇 - 데이터 요약
+    # 6. 퀀트봇이 데이터로 결론
     quant = TRADER_PERSONAS['quant_bot']
 
-    # 테마 통계
-    up_count = len([t for t in hot_themes if t.get('change', 0) > 0])
-    down_count = len([t for t in hot_themes if t.get('change', 0) < 0])
+    # 상승/하락 테마 카운트
+    up_themes = len([t for t in hot_themes if t.get('change', 0) > 0])
+    down_themes = len([t for t in hot_themes if t.get('change', 0) < 0])
 
-    quant_msg = f"[실시간 데이터] "
-    if hot_themes:
-        quant_msg += f"테마: 상승 {up_count}개 / 하락 {down_count}개 | "
-    quant_msg += f"RSI: {rsi:.0f} | 변동성: {volatility:.1f}% | "
-
-    # 종합 점수 계산
+    # 점수 계산
     score = 50
-    score += min(20, up_count * 5)  # 상승 테마 개수
-    score -= min(20, down_count * 5)  # 하락 테마 개수
-    if metrics.get('above_ma20'): score += 10
-    if metrics.get('above_ma60'): score += 10
-    if 30 < rsi < 70: score += 5
-
+    if is_rising: score += 10
+    if above_ma20: score += 15
+    if above_ma60: score += 10
+    if 40 < rsi < 60: score += 5
+    elif rsi > 70: score -= 10
+    elif rsi < 30: score += 5  # 과매도는 반등 기회
+    score += (up_themes - down_themes) * 3
     score = max(0, min(100, score))
-    quant_msg += f"시장 점수: {score}/100 "
+
+    quant_msg = f"**[데이터 기반 결론]** 🤖\n\n"
+    quant_msg += f"**{debate_topic}** 종합 점수: **{score}/100**\n\n"
+    quant_msg += f"• 테마 동향: 상승 {up_themes}개 vs 하락 {down_themes}개\n"
+    quant_msg += f"• RSI: {rsi:.0f} ({'과매수 주의' if rsi > 70 else '과매도 구간' if rsi < 30 else '정상'})\n"
+    quant_msg += f"• 이평선: 20일선 {'✅' if above_ma20 else '❌'} / 60일선 {'✅' if above_ma60 else '❌'}\n\n"
 
     if score >= 65:
-        quant_msg += "📗 긍정적 (테마 강세 + 기술적 양호)"
+        quant_msg += f"→ @{bull['name']}님 의견 지지. **매수 우위** 📗\n"
+        quant_msg += f"@{retail['name']}님, 분할매수 괜찮아 보입니다."
+        quant_stance = '📈 상승'
     elif score >= 45:
-        quant_msg += "📒 중립 (혼조세)"
+        quant_msg += f"→ 양쪽 팽팽. **중립/관망** 📒\n"
+        quant_msg += f"@{retail['name']}님, 명확한 시그널 대기 추천."
+        quant_stance = '⏸️ 중립'
     else:
-        quant_msg += "📕 주의 (테마 약세 또는 기술적 약세)"
+        quant_msg += f"→ @{bear['name']}님 의견 지지. **매수 대기** 📕\n"
+        quant_msg += f"@{retail['name']}님, 조정 후 진입 추천."
+        quant_stance = '📉 조정/하락'
 
     posts.append({
         'persona': quant,
         'message': quant_msg,
         'timestamp': '15분 전',
-        'likes': np.random.randint(150, 400),
-        'comments': np.random.randint(30, 100),
-        'validity': "실시간 (데이터 변경 시 자동 업데이트)",
+        'likes': np.random.randint(180, 400),
+        'comments': np.random.randint(50, 120),
+        'validity': "실시간 (데이터 갱신 시 자동 업데이트)",
         'conditions': [
-            f"테마 동향: 상승 {up_count}개 vs 하락 {down_count}개",
-            f"기술적: 20일선 {'✓' if metrics.get('above_ma20') else '✗'} / 60일선 {'✓' if metrics.get('above_ma60') else '✗'}",
-            f"RSI: {rsi:.0f} (30-70 정상, 그 외 주의)"
+            f"점수 {score} → 65 이상 매수 우위, 45 이하 매도 우위",
+            "RSI/이평선 상태 변화 시 재계산",
+            "테마 동향 변화 모니터링"
         ],
-        'invalidate': "데이터 변경 시 자동 재계산",
-        'confidence': score
+        'invalidate': "점수 구간 변동 시 시그널 변경",
+        'confidence': score,
+        'stance': quant_stance
     })
 
     return posts
@@ -968,6 +987,24 @@ def render_sns_discussion(posts: List[Dict]):
         conditions = post.get('conditions', [])
         invalidate = post.get('invalidate', '')
         score_breakdown = post.get('score_breakdown', {})
+        stance = post.get('stance', '')
+
+        # 입장 배지 색상
+        stance_badge = ""
+        if stance:
+            if '상승' in stance:
+                stance_bg = '#dcfce7'
+                stance_color = '#166534'
+            elif '하락' in stance or '조정' in stance:
+                stance_bg = '#fee2e2'
+                stance_color = '#991b1b'
+            elif '질문' in stance:
+                stance_bg = '#e0e7ff'
+                stance_color = '#3730a3'
+            else:  # 중립/관망
+                stance_bg = '#fef9c3'
+                stance_color = '#854d0e'
+            stance_badge = f"<span class='confidence-badge' style='background: {stance_bg}; color: {stance_color}; font-weight: bold;'>{stance}</span>"
 
         # 신뢰도 배지 색상
         if confidence is not None:
@@ -990,7 +1027,7 @@ def render_sns_discussion(posts: List[Dict]):
             <div class='sns-header'>
                 <span class='sns-avatar'>{persona["avatar"]}</span>
                 <div>
-                    <div class='sns-name' style='color: {persona["color"]};'>{persona["name"]}</div>
+                    <div class='sns-name' style='color: {persona["color"]};'>{persona["name"]} {stance_badge}</div>
                     <div class='sns-bio'>{persona["bio"]}</div>
                 </div>
                 <span class='sns-time'>{post["timestamp"]}</span>
