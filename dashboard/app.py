@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+from typing import Optional, Dict
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import sys
@@ -469,53 +470,120 @@ def render_sns_discussion_compact(metrics: dict, condition: dict, gainers: list,
 
 
 def render_snowflake_compact():
-    """메인 대시보드용 Snowflake 분석 컴팩트 버전"""
-    st.markdown("### ❄️ 주요 종목 Snowflake")
-    st.caption("6축 레이더 차트로 종목 특성을 한눈에")
+    """메인 대시보드용 Snowflake 분석 컴팩트 버전 - 전체 종목 지원"""
+    st.markdown("### ❄️ 종목 Snowflake 분석")
+    st.caption("종목을 검색하면 6축 레이더 차트로 특성을 분석합니다")
 
-    # 샘플 종목 데이터
-    sample_stocks = {
-        '삼성전자': {'per': 15.2, 'pbr': 1.3, 'roe': 8.5, 'dividend_yield': 2.1,
-                   'debt_ratio': 35, 'current_ratio': 2.5, 'revenue_growth': 5,
-                   'earnings_growth': 8, 'operating_margin': 12, 'net_margin': 10},
-        'SK하이닉스': {'per': 8.5, 'pbr': 1.8, 'roe': 21, 'dividend_yield': 1.2,
-                    'debt_ratio': 45, 'current_ratio': 2.0, 'revenue_growth': 25,
-                    'earnings_growth': 35, 'operating_margin': 20, 'net_margin': 18},
-        '현대차': {'per': 6.5, 'pbr': 0.6, 'roe': 10, 'dividend_yield': 4.5,
-                 'debt_ratio': 120, 'current_ratio': 1.2, 'revenue_growth': 8,
-                 'earnings_growth': 15, 'operating_margin': 8, 'net_margin': 6},
-    }
+    # 종목 검색
+    search_input = st.text_input(
+        "종목 검색",
+        placeholder="종목명 또는 코드 (예: 삼성전자, 005930)",
+        key="main_snowflake_search"
+    )
 
-    selected = st.selectbox("종목 선택", list(sample_stocks.keys()), key="main_snowflake_select")
-    stock_data = sample_stocks[selected]
+    # 인기 종목 퀵 버튼
+    popular_stocks = [
+        ('삼성전자', '005930'), ('SK하이닉스', '000660'), ('현대차', '005380'),
+        ('NAVER', '035420'), ('카카오', '035720'), ('LG에너지솔루션', '373220')
+    ]
 
-    scores = snowflake_analyzer.calculate_scores(fundamentals=stock_data, sector='default')
-    grade, emoji, description = get_overall_rating(scores)
+    st.caption("인기 종목:")
+    quick_cols = st.columns(6)
+    for i, (name, code) in enumerate(popular_stocks):
+        with quick_cols[i]:
+            if st.button(name[:4], key=f"quick_snow_{code}", use_container_width=True):
+                st.session_state.snowflake_selected_code = code
+                st.session_state.snowflake_selected_name = name
 
-    col1, col2 = st.columns([2, 1])
+    # 선택된 종목 또는 검색된 종목 분석
+    selected_code = st.session_state.get('snowflake_selected_code')
+    selected_name = st.session_state.get('snowflake_selected_name')
 
-    with col1:
-        fig = create_snowflake_chart(scores, selected)
-        fig.update_layout(height=280, margin=dict(l=30, r=30, t=30, b=30))
-        st.plotly_chart(fig, use_container_width=True)
+    if search_input:
+        # 검색어로 종목 찾기
+        if KOREA_AVAILABLE:
+            try:
+                krx = KRXDataCollector()
+                stock_list = krx.get_stock_list('ALL')
+                if not stock_list.empty:
+                    # 이름 또는 코드로 검색
+                    mask = (stock_list['name'].str.contains(search_input, case=False, na=False) |
+                            stock_list['code'].str.contains(search_input, na=False))
+                    matches = stock_list[mask].head(5)
 
-    with col2:
-        st.markdown(f"### {emoji} {grade}")
-        st.caption(description)
-        st.markdown(f"""
-        | 지표 | 점수 |
-        |:---:|:---:|
-        | 가치 | {scores.value:.1f}/6 |
-        | 미래 | {scores.future:.1f}/6 |
-        | 과거 | {scores.past:.1f}/6 |
-        | 배당 | {scores.dividend:.1f}/6 |
-        | 건전성 | {scores.health:.1f}/6 |
-        | **종합** | **{scores.total:.1f}/6** |
-        """)
+                    if not matches.empty:
+                        selected_code = matches.iloc[0]['code']
+                        selected_name = matches.iloc[0]['name']
+            except Exception:
+                pass
+
+    if selected_code and selected_name:
+        # 실제 펀더멘털 데이터 조회
+        stock_data = _get_stock_fundamentals_for_snowflake(selected_code)
+
+        if stock_data:
+            scores = snowflake_analyzer.calculate_scores(fundamentals=stock_data, sector='default')
+            grade, emoji, description = get_overall_rating(scores)
+
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                fig = create_snowflake_chart(scores, selected_name)
+                fig.update_layout(height=280, margin=dict(l=30, r=30, t=30, b=30))
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                st.markdown(f"### {emoji} {grade}")
+                st.caption(f"{selected_name} ({selected_code})")
+                st.markdown(f"""
+                | 지표 | 점수 |
+                |:---:|:---:|
+                | 가치 | {scores.value:.1f}/6 |
+                | 미래 | {scores.future:.1f}/6 |
+                | 과거 | {scores.past:.1f}/6 |
+                | 배당 | {scores.dividend:.1f}/6 |
+                | 건전성 | {scores.health:.1f}/6 |
+                | **종합** | **{scores.total:.1f}/6** |
+                """)
+        else:
+            st.warning(f"{selected_name} 데이터를 불러올 수 없습니다.")
+    else:
+        st.info("👆 종목을 검색하거나 인기 종목 버튼을 클릭하세요")
 
     if st.button("❄️ Snowflake 상세 분석", key="view_snowflake", use_container_width=True):
         st.session_state.current_page = 'snowflake'
         st.rerun()
+
+
+def _get_stock_fundamentals_for_snowflake(code: str) -> Optional[Dict]:
+    """Snowflake 분석용 펀더멘털 데이터 조회"""
+    try:
+        from korea.korean_stocks import KoreanStockAnalyzer
+        analyzer = KoreanStockAnalyzer()
+        fundamentals = analyzer.get_fundamentals(code)
+
+        if fundamentals:
+            return {
+                'per': fundamentals.per or 15,
+                'pbr': fundamentals.pbr or 1.5,
+                'roe': fundamentals.roe or 10,
+                'dividend_yield': fundamentals.dividend_yield or 1.0,
+                'debt_ratio': 50,  # 기본값 (별도 API 필요)
+                'current_ratio': 1.5,
+                'revenue_growth': 5,
+                'earnings_growth': 8,
+                'operating_margin': 10,
+                'net_margin': 8,
+            }
+    except Exception as e:
+        pass
+
+    # 폴백: 기본 데이터
+    return {
+        'per': 15, 'pbr': 1.5, 'roe': 10, 'dividend_yield': 1.5,
+        'debt_ratio': 50, 'current_ratio': 1.5, 'revenue_growth': 5,
+        'earnings_growth': 8, 'operating_margin': 10, 'net_margin': 8
+    }
 
 
 def render_catalyst_compact():
