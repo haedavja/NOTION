@@ -305,6 +305,289 @@ def generate_market_narrative(metrics: Dict, condition: Dict, phase: str = None)
     return " ".join(parts)
 
 
+# ============ SNS 스타일 시장 토론 ============
+
+# 트레이더 페르소나 정의
+TRADER_PERSONAS = {
+    'bull_master': {
+        'name': '강세론자 김프로',
+        'avatar': '🐂',
+        'style': 'optimistic',
+        'color': '#22c55e',
+        'bio': '20년차 펀드매니저 | 장기 우상향 신봉자'
+    },
+    'bear_hunter': {
+        'name': '신중파 이차장',
+        'avatar': '🐻',
+        'style': 'cautious',
+        'color': '#ef4444',
+        'bio': '리스크 관리 전문 | 하방 리스크 경계'
+    },
+    'tech_guru': {
+        'name': '차트장인 박대리',
+        'avatar': '📊',
+        'style': 'technical',
+        'color': '#3b82f6',
+        'bio': '기술적분석 마니아 | 이평선이 답이다'
+    },
+    'macro_sage': {
+        'name': '거시경제 최박사',
+        'avatar': '🌍',
+        'style': 'fundamental',
+        'color': '#8b5cf6',
+        'bio': '경제학 박사 | 금리와 환율의 힘'
+    },
+    'retail_voice': {
+        'name': '개미투자자 정씨',
+        'avatar': '🐜',
+        'style': 'retail',
+        'color': '#f59e0b',
+        'bio': '5년차 개인투자자 | 실전 경험담'
+    },
+    'quant_bot': {
+        'name': '퀀트봇 Q-1',
+        'avatar': '🤖',
+        'style': 'quantitative',
+        'color': '#06b6d4',
+        'bio': 'AI 기반 분석 | 데이터가 말한다'
+    }
+}
+
+
+def generate_sns_market_discussion(
+    metrics: Dict,
+    condition: Dict,
+    gainers: List[Dict] = None,
+    losers: List[Dict] = None,
+    phase: str = None
+) -> List[Dict]:
+    """
+    SNS 스타일 시장 토론 생성
+    여러 페르소나가 대화하듯 시장을 분석
+    """
+    posts = []
+    return_1m = metrics.get('return_1m', 0)
+    return_1w = metrics.get('return_1w', 0)
+    rsi = metrics.get('rsi', 50)
+    from_high = metrics.get('from_high', 0)
+    trend = condition.get('trend', '혼조세')
+    volatility = metrics.get('volatility', 20)
+
+    # 1. 강세론자의 의견
+    bull = TRADER_PERSONAS['bull_master']
+    if return_1m > 0:
+        bull_msg = f"오늘도 시장은 우상향 중! 📈 한달간 +{return_1m:.1f}% 상승했어요. "
+        if metrics.get('above_ma60'):
+            bull_msg += "60일선 위에서 탄탄하게 지지받고 있고, 이 흐름 당분간 계속될 듯. "
+        bull_msg += "조정 오면 그게 매수 기회입니다! 💪"
+    else:
+        bull_msg = f"한달간 {return_1m:.1f}%... 아직 걱정할 단계 아닙니다. "
+        bull_msg += "오히려 저가 매수 기회로 봐야죠. 좋은 기업은 결국 오릅니다! 🎯"
+
+    posts.append({
+        'persona': bull,
+        'message': bull_msg,
+        'timestamp': '방금 전',
+        'likes': np.random.randint(50, 200),
+        'comments': np.random.randint(10, 50)
+    })
+
+    # 2. 신중파의 반박
+    bear = TRADER_PERSONAS['bear_hunter']
+    if rsi > 65:
+        bear_msg = f"잠깐, RSI가 {rsi:.0f}이에요. 과열 신호 아닌가요? 🤔 "
+        bear_msg += "고점에서 물리면 손실 회복하는데 몇 년 걸릴 수 있어요. "
+    elif from_high > -10:
+        bear_msg = f"52주 고점 대비 {abs(from_high):.1f}%밖에 안 빠졌어요. "
+        bear_msg += "여기서 추격매수는 위험합니다. 조정 기다리세요! ⚠️"
+    else:
+        bear_msg = f"많이 빠진 건 맞는데... 더 빠질 수도 있어요. "
+        bear_msg += f"변동성이 {volatility:.0f}%나 되는데 섣불리 들어가면 안됩니다."
+
+    posts.append({
+        'persona': bear,
+        'message': bear_msg,
+        'timestamp': '2분 전',
+        'likes': np.random.randint(30, 150),
+        'comments': np.random.randint(15, 60)
+    })
+
+    # 3. 차트장인의 기술적 분석
+    tech = TRADER_PERSONAS['tech_guru']
+    if metrics.get('above_ma20') and metrics.get('above_ma60'):
+        tech_msg = f"차트로 보면 명확합니다! 📊 "
+        tech_msg += f"20일선({metrics.get('ma20', 0):,.0f}) 위, 60일선({metrics.get('ma60', 0):,.0f}) 위. "
+        tech_msg += "정배열 상태에서 추세 추종이 답입니다. "
+    elif not metrics.get('above_ma20'):
+        tech_msg = f"20일선 이탈했네요... 단기 약세 신호입니다. "
+        tech_msg += f"지지선 {metrics.get('ma60', 0):,.0f} 지켜보세요. 이거 깨지면 손절 고려해야 해요."
+    else:
+        tech_msg = "이평선 혼조... 방향성이 애매합니다. "
+        tech_msg += "확실한 시그널 나올 때까지 관망이 좋겠어요. 🧐"
+
+    posts.append({
+        'persona': tech,
+        'message': tech_msg,
+        'timestamp': '5분 전',
+        'likes': np.random.randint(80, 250),
+        'comments': np.random.randint(20, 80)
+    })
+
+    # 4. 거시경제 전문가
+    macro = TRADER_PERSONAS['macro_sage']
+    if phase:
+        macro_msg = f"경기 사이클 관점에서 보면 지금은 **{phase}** 국면입니다. "
+        if '확장' in phase:
+            macro_msg += "확장기엔 주식 비중 늘려도 됩니다. 금리 동향만 주시하세요. "
+        elif '수축' in phase:
+            macro_msg += "수축기 진입... 방어주 위주로 리밸런싱 고려하세요. "
+        else:
+            macro_msg += "회복기 초입이면 성장주 선취매도 나쁘지 않습니다. "
+    else:
+        macro_msg = "거시경제 지표들 보면 당분간 횡보장 예상됩니다. "
+        macro_msg += "금리 인하 시그널 나올 때까지 기다려보는 것도 전략이에요. 🎓"
+
+    posts.append({
+        'persona': macro,
+        'message': macro_msg,
+        'timestamp': '8분 전',
+        'likes': np.random.randint(100, 300),
+        'comments': np.random.randint(25, 100)
+    })
+
+    # 5. 개미투자자의 현실적 의견
+    retail = TRADER_PERSONAS['retail_voice']
+    if gainers and len(gainers) > 0:
+        top_gainer = gainers[0]
+        retail_msg = f"오늘 {top_gainer['name']} +{top_gainer['change']:.1f}% 갔네요... "
+        retail_msg += "어제 팔았는데 ㅠㅠ 항상 파는 순간 오르더라... "
+    else:
+        retail_msg = "요즘 너무 어렵네요... "
+
+    if return_1w < 0:
+        retail_msg += f"이번주만 {return_1w:.1f}%... 월급 다 녹았어요. 😭 "
+        retail_msg += "근데 전문가분들 말 들으면서 공부하고 있습니다!"
+    else:
+        retail_msg += "그래도 이번주는 조금 회복해서 다행이에요. "
+        retail_msg += "소액으로 분할매수 중입니다! 화이팅! 💪"
+
+    posts.append({
+        'persona': retail,
+        'message': retail_msg,
+        'timestamp': '12분 전',
+        'likes': np.random.randint(200, 500),
+        'comments': np.random.randint(50, 150)
+    })
+
+    # 6. 퀀트봇의 데이터 분석
+    quant = TRADER_PERSONAS['quant_bot']
+    quant_msg = f"[데이터 분석 결과] "
+    quant_msg += f"RSI: {rsi:.1f} | 변동성: {volatility:.1f}% | "
+    quant_msg += f"1M 수익률: {return_1m:+.1f}% | "
+
+    # 종합 점수 계산
+    score = 50
+    if metrics.get('above_ma20'):
+        score += 10
+    if metrics.get('above_ma60'):
+        score += 10
+    if return_1m > 0:
+        score += 10
+    if rsi < 70:
+        score += 5
+    if rsi > 30:
+        score += 5
+
+    quant_msg += f"종합 점수: {score}/100. "
+
+    if score >= 70:
+        quant_msg += "📗 매수 우위 시그널"
+    elif score >= 50:
+        quant_msg += "📒 중립 시그널"
+    else:
+        quant_msg += "📕 매도 우위 시그널"
+
+    posts.append({
+        'persona': quant,
+        'message': quant_msg,
+        'timestamp': '15분 전',
+        'likes': np.random.randint(150, 400),
+        'comments': np.random.randint(30, 100)
+    })
+
+    return posts
+
+
+def render_sns_discussion(posts: List[Dict]):
+    """SNS 스타일 토론 UI 렌더링"""
+    st.markdown("""
+    <style>
+    .sns-post {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .sns-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .sns-avatar {
+        font-size: 2rem;
+        margin-right: 0.75rem;
+    }
+    .sns-name {
+        font-weight: bold;
+        font-size: 1rem;
+    }
+    .sns-bio {
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+    .sns-time {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        margin-left: auto;
+    }
+    .sns-message {
+        font-size: 1rem;
+        line-height: 1.6;
+        margin: 0.75rem 0;
+    }
+    .sns-actions {
+        display: flex;
+        gap: 1.5rem;
+        color: #6b7280;
+        font-size: 0.85rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    for post in posts:
+        persona = post['persona']
+        st.markdown(f"""
+        <div class='sns-post' style='border-left: 4px solid {persona["color"]};'>
+            <div class='sns-header'>
+                <span class='sns-avatar'>{persona["avatar"]}</span>
+                <div>
+                    <div class='sns-name' style='color: {persona["color"]};'>{persona["name"]}</div>
+                    <div class='sns-bio'>{persona["bio"]}</div>
+                </div>
+                <span class='sns-time'>{post["timestamp"]}</span>
+            </div>
+            <div class='sns-message'>{post["message"]}</div>
+            <div class='sns-actions'>
+                <span>❤️ {post["likes"]}</span>
+                <span>💬 {post["comments"]}</span>
+                <span>🔄 공유</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
 def identify_risks(metrics: Dict, condition: Dict) -> List[Dict]:
     """리스크 요인 식별"""
     risks = []
@@ -664,17 +947,33 @@ def render_market_overview_page():
 
         st.divider()
 
-        # 시장 내러티브 (논리와 근거)
-        st.subheader("📖 시장 분석 요약")
-
         # 시장 국면 (섹터 분석 연동)
         market_phase = None
         if SECTOR_AVAILABLE:
             market_phase = "회복"  # 기본값, 실제로는 sector_rotation에서 가져옴
 
-        narrative = generate_market_narrative(metrics, condition, market_phase)
+        # 분석 뷰 선택
+        view_mode = st.radio(
+            "분석 보기 방식",
+            options=['💬 SNS 토론', '📄 요약 리포트'],
+            horizontal=True,
+            key="market_view_mode"
+        )
 
-        st.info(narrative)
+        if view_mode == '💬 SNS 토론':
+            st.subheader("💬 시장 토론방")
+            st.caption("다양한 관점의 전문가들이 현재 시장을 분석합니다")
+
+            # SNS 스타일 토론 생성
+            posts = generate_sns_market_discussion(
+                metrics, condition, gainers, losers, market_phase
+            )
+            render_sns_discussion(posts)
+
+        else:
+            st.subheader("📖 시장 분석 요약")
+            narrative = generate_market_narrative(metrics, condition, market_phase)
+            st.info(narrative)
 
         # 핵심 지표 카드
         st.subheader("📊 핵심 지표")
