@@ -453,11 +453,19 @@ class KRXDataCollector:
             return self._get_sample_index_data(index_name, days)
 
     def _get_sample_index_data(self, index_name: str, days: int) -> pd.DataFrame:
-        """샘플 지수 데이터"""
+        """샘플 지수 데이터 (2025년 1월 기준)"""
         import numpy as np
 
         dates = pd.date_range(end=datetime.now(), periods=days, freq='B')
-        base = 2500 if index_name == 'KOSPI' else 850
+
+        # 2025년 1월 기준 지수 값
+        base_values = {
+            'KOSPI': 2400,
+            'KOSDAQ': 680,
+            'KOSPI200': 320,
+            'KRX100': 4800,
+        }
+        base = base_values.get(index_name, 2400)
 
         np.random.seed(42)
         returns = np.random.randn(days) * 0.01
@@ -475,57 +483,151 @@ class KRXDataCollector:
         """
         시장 요약
 
+        우선순위:
+        1. pykrx (KRX 공식)
+        2. 네이버 금융 스크래핑
+        3. 샘플 데이터
+
         Returns:
             시장 요약 정보
         """
-        if not self.enabled:
-            return self._get_sample_market_summary()
+        # 1. pykrx 시도
+        if self.enabled:
+            try:
+                today = datetime.now().strftime('%Y%m%d')
+                yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
 
+                summary = {}
+
+                # KOSPI
+                kospi = stock.get_index_ohlcv_by_date(yesterday, today, '1001')
+                if not kospi.empty:
+                    summary['KOSPI'] = {
+                        'close': kospi['종가'].iloc[-1],
+                        'change': kospi['종가'].iloc[-1] - kospi['종가'].iloc[0],
+                        'change_pct': (kospi['종가'].iloc[-1] / kospi['종가'].iloc[0] - 1) * 100,
+                        'volume': int(kospi['거래량'].iloc[-1]),
+                    }
+
+                # KOSDAQ
+                kosdaq = stock.get_index_ohlcv_by_date(yesterday, today, '2001')
+                if not kosdaq.empty:
+                    summary['KOSDAQ'] = {
+                        'close': kosdaq['종가'].iloc[-1],
+                        'change': kosdaq['종가'].iloc[-1] - kosdaq['종가'].iloc[0],
+                        'change_pct': (kosdaq['종가'].iloc[-1] / kosdaq['종가'].iloc[0] - 1) * 100,
+                        'volume': int(kosdaq['거래량'].iloc[-1]),
+                    }
+
+                if summary:
+                    return summary
+
+            except Exception as e:
+                logger.warning(f"pykrx 시장 요약 오류: {e}")
+
+        # 2. 네이버 금융 폴백
+        naver_summary = self._fetch_naver_market_summary()
+        if naver_summary:
+            return naver_summary
+
+        # 3. 샘플 데이터
+        return self._get_sample_market_summary()
+
+    def _fetch_naver_market_summary(self) -> Dict:
+        """
+        네이버 금융에서 시장 요약 조회 (pykrx 폴백)
+
+        Returns:
+            시장 요약 또는 빈 딕셔너리
+        """
         try:
-            today = datetime.now().strftime('%Y%m%d')
-            yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+            import requests
+            from bs4 import BeautifulSoup
+            import re
 
+            url = 'https://finance.naver.com/sise/'
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            response = requests.get(url, headers=headers, timeout=5)
+
+            if response.status_code != 200:
+                return {}
+
+            soup = BeautifulSoup(response.text, 'html.parser')
             summary = {}
 
             # KOSPI
-            kospi = stock.get_index_ohlcv_by_date(yesterday, today, '1001')
-            if not kospi.empty:
+            kospi_now = soup.select_one('#KOSPI_now')
+            kospi_change = soup.select_one('#KOSPI_change')
+            if kospi_now:
+                close = float(kospi_now.text.replace(',', ''))
+                change = 0.0
+                change_pct = 0.0
+
+                if kospi_change:
+                    change_text = kospi_change.text.strip()
+                    # 상승/하락 파싱
+                    match = re.search(r'([\d,.]+)', change_text)
+                    if match:
+                        change = float(match.group(1).replace(',', ''))
+                        if '하락' in kospi_change.parent.text or 'down' in str(kospi_change.get('class', [])):
+                            change = -change
+                        change_pct = (change / (close - change)) * 100 if close != change else 0
+
                 summary['KOSPI'] = {
-                    'close': kospi['종가'].iloc[-1],
-                    'change': kospi['종가'].iloc[-1] - kospi['종가'].iloc[0],
-                    'change_pct': (kospi['종가'].iloc[-1] / kospi['종가'].iloc[0] - 1) * 100,
-                    'volume': int(kospi['거래량'].iloc[-1]),
+                    'close': close,
+                    'change': change,
+                    'change_pct': round(change_pct, 2),
+                    'volume': 0,
                 }
+                logger.info(f"네이버 KOSPI 조회 성공: {close:,.2f}")
 
             # KOSDAQ
-            kosdaq = stock.get_index_ohlcv_by_date(yesterday, today, '2001')
-            if not kosdaq.empty:
+            kosdaq_now = soup.select_one('#KOSDAQ_now')
+            kosdaq_change = soup.select_one('#KOSDAQ_change')
+            if kosdaq_now:
+                close = float(kosdaq_now.text.replace(',', ''))
+                change = 0.0
+                change_pct = 0.0
+
+                if kosdaq_change:
+                    change_text = kosdaq_change.text.strip()
+                    match = re.search(r'([\d,.]+)', change_text)
+                    if match:
+                        change = float(match.group(1).replace(',', ''))
+                        if '하락' in kosdaq_change.parent.text or 'down' in str(kosdaq_change.get('class', [])):
+                            change = -change
+                        change_pct = (change / (close - change)) * 100 if close != change else 0
+
                 summary['KOSDAQ'] = {
-                    'close': kosdaq['종가'].iloc[-1],
-                    'change': kosdaq['종가'].iloc[-1] - kosdaq['종가'].iloc[0],
-                    'change_pct': (kosdaq['종가'].iloc[-1] / kosdaq['종가'].iloc[0] - 1) * 100,
-                    'volume': int(kosdaq['거래량'].iloc[-1]),
+                    'close': close,
+                    'change': change,
+                    'change_pct': round(change_pct, 2),
+                    'volume': 0,
                 }
+                logger.info(f"네이버 KOSDAQ 조회 성공: {close:,.2f}")
 
             return summary
 
+        except ImportError:
+            logger.warning("BeautifulSoup 미설치 - pip install beautifulsoup4")
+            return {}
         except Exception as e:
-            print(f"시장 요약 오류: {e}")
-            return self._get_sample_market_summary()
+            logger.warning(f"네이버 시장 요약 조회 실패: {e}")
+            return {}
 
     def _get_sample_market_summary(self) -> Dict:
-        """샘플 시장 요약"""
+        """샘플 시장 요약 (2025년 1월 기준)"""
         return {
             'KOSPI': {
-                'close': 2650.25,
-                'change': 15.32,
-                'change_pct': 0.58,
+                'close': 2400.0,
+                'change': -15.0,
+                'change_pct': -0.62,
                 'volume': 350000000,
             },
             'KOSDAQ': {
-                'close': 875.50,
-                'change': -5.20,
-                'change_pct': -0.59,
+                'close': 680.0,
+                'change': -5.0,
+                'change_pct': -0.73,
                 'volume': 850000000,
             },
         }
