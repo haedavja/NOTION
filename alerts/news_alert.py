@@ -4,6 +4,7 @@
 """
 
 import time
+import logging
 import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
@@ -11,6 +12,8 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import os
+
+logger = logging.getLogger(__name__)
 
 try:
     import schedule
@@ -118,9 +121,9 @@ class NewsAlertSystem:
         self.rules = [r for r in self.rules if r.name != name]
 
     def _get_news_hash(self, news: Dict) -> str:
-        """뉴스 고유 해시 생성"""
+        """뉴스 고유 해시 생성 (SHA256)"""
         content = f"{news.get('title', '')}{news.get('url', '')}"
-        return hashlib.md5(content.encode()).hexdigest()
+        return hashlib.sha256(content.encode()).hexdigest()[:32]
 
     def _is_duplicate(self, news: Dict, hours: int = 24) -> bool:
         """중복 뉴스 확인"""
@@ -225,7 +228,7 @@ class NewsAlertSystem:
                 sentiment=sentiment,
             )
 
-        print(f"[Alert] {rule.name}: {title[:50]}...")
+        logger.info(f"[Alert] {rule.name}: {title[:50]}...")
 
     def check_news(self):
         """뉴스 확인 및 알림"""
@@ -257,16 +260,16 @@ class NewsAlertSystem:
                         break  # 하나의 규칙에만 매칭
 
         except Exception as e:
-            print(f"뉴스 확인 중 오류: {e}")
+            logger.error(f"뉴스 확인 중 오류: {e}")
 
     def start(self, interval_minutes: int = 5):
         """알림 시스템 시작"""
         if not SCHEDULE_AVAILABLE:
-            print("schedule 라이브러리가 필요합니다. pip install schedule")
+            logger.error("schedule 라이브러리가 필요합니다. pip install schedule")
             return
 
         if self.is_running:
-            print("이미 실행 중입니다.")
+            logger.warning("이미 실행 중입니다.")
             return
 
         self.is_running = True
@@ -286,7 +289,7 @@ class NewsAlertSystem:
         self._thread = threading.Thread(target=run_schedule, daemon=True)
         self._thread.start()
 
-        print(f"뉴스 알림 시스템 시작됨 (간격: {interval_minutes}분)")
+        logger.info(f"뉴스 알림 시스템 시작됨 (간격: {interval_minutes}분)")
 
     def stop(self):
         """알림 시스템 중지"""
@@ -296,7 +299,7 @@ class NewsAlertSystem:
         if self._thread:
             self._thread.join(timeout=5)
 
-        print("뉴스 알림 시스템 중지됨")
+        logger.info("뉴스 알림 시스템 중지됨")
 
     def get_status(self) -> Dict:
         """상태 조회"""

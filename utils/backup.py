@@ -127,8 +127,8 @@ class BackupManager:
         return filtered
 
     def _calculate_checksum(self, filepath: Path) -> str:
-        """파일 체크섬 계산"""
-        hasher = hashlib.md5()
+        """파일 체크섬 계산 (SHA256)"""
+        hasher = hashlib.sha256()
         with open(filepath, 'rb') as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 hasher.update(chunk)

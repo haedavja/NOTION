@@ -75,7 +75,7 @@ def render_market_keywords():
     if KEYWORDS_AVAILABLE:
         try:
             realtime_data = get_realtime_keywords()
-        except:
+        except Exception:
             pass
 
     if realtime_data and realtime_data.get('all_keywords'):

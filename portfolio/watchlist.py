@@ -4,11 +4,14 @@
 """
 
 import json
+import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 try:
     import yfinance as yf
@@ -109,7 +112,7 @@ class WatchlistManager:
                         self.groups[item.group].items.append(item)
 
             except Exception as e:
-                print(f"워치리스트 로드 실패: {e}")
+                logger.error(f"워치리스트 로드 실패: {e}")
 
     def _save(self):
         """데이터 저장"""
@@ -144,7 +147,7 @@ class WatchlistManager:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
         except Exception as e:
-            print(f"워치리스트 저장 실패: {e}")
+            logger.error(f"워치리스트 저장 실패: {e}")
 
     def add_item(self, symbol: str, name: str,
                  group: str = "favorites", **kwargs) -> WatchlistItem:
@@ -264,10 +267,10 @@ class WatchlistManager:
                             }
 
                 except Exception as e:
-                    print(f"{symbol} 가격 조회 실패: {e}")
+                    logger.warning(f"{symbol} 가격 조회 실패: {e}")
 
         except Exception as e:
-            print(f"가격 업데이트 실패: {e}")
+            logger.error(f"가격 업데이트 실패: {e}")
 
         return results
 
@@ -317,7 +320,7 @@ class WatchlistManager:
                     })
 
             except Exception as e:
-                print(f"{symbol} 데이터 조회 실패: {e}")
+                logger.warning(f"{symbol} 데이터 조회 실패: {e}")
 
         # 수익률 순 정렬
         result["summary"].sort(key=lambda x: x["return_pct"], reverse=True)
@@ -388,7 +391,7 @@ class WatchlistManager:
                 })
 
             except Exception as e:
-                print(f"{symbol} 분석 실패: {e}")
+                logger.warning(f"{symbol} 분석 실패: {e}")
 
         return results
 

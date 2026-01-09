@@ -128,7 +128,7 @@ class DividendCalendar:
                 try:
                     price = ticker.fast_info.last_price
                     dividend_per_share = price * (dividend_yield / 100)
-                except:
+                except Exception:
                     pass
 
             if dividend_yield > 0 or dividend_per_share > 0:

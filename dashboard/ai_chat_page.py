@@ -134,7 +134,7 @@ def render_stock_analysis():
                         'operating_margin': (info.get('operatingMargins', 0) or 0) * 100,
                         'debt_ratio': info.get('debtToEquity', 0),
                     }
-                except:
+                except Exception:
                     stock_data = {'name': symbol}
 
                 result = ai_assistant.analyze_stock(symbol, stock_data)

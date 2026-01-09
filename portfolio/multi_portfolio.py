@@ -5,6 +5,7 @@
 
 import json
 import os
+import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field, asdict
@@ -12,6 +13,8 @@ from pathlib import Path
 from enum import Enum
 
 from .portfolio import Portfolio, Position
+
+logger = logging.getLogger(__name__)
 
 
 class PortfolioType(Enum):
@@ -112,7 +115,7 @@ class MultiPortfolioManager:
                     self._load_portfolio(meta.id)
 
             except Exception as e:
-                print(f"Portfolio index load error: {e}")
+                logger.error(f"Portfolio index load error: {e}")
 
         # 기본 포트폴리오 생성
         if not self._meta:
@@ -147,7 +150,7 @@ class MultiPortfolioManager:
                 self._portfolios[portfolio_id] = portfolio
 
         except Exception as e:
-            print(f"Portfolio load error ({portfolio_id}): {e}")
+            logger.error(f"Portfolio load error ({portfolio_id}): {e}")
 
     def _save_index(self):
         """인덱스 저장"""
@@ -160,7 +163,7 @@ class MultiPortfolioManager:
                     'updated_at': datetime.now().isoformat()
                 }, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"Index save error: {e}")
+            logger.error(f"Index save error: {e}")
 
     def _save_portfolio(self, portfolio_id: str):
         """개별 포트폴리오 저장"""
@@ -198,7 +201,7 @@ class MultiPortfolioManager:
             self._save_index()
 
         except Exception as e:
-            print(f"Portfolio save error ({portfolio_id}): {e}")
+            logger.error(f"Portfolio save error ({portfolio_id}): {e}")
 
     # ===== 포트폴리오 관리 =====
 

@@ -137,7 +137,7 @@ class SocialSentimentAnalyzer:
                                 timestamp = datetime.strptime(date_str, '%Y.%m.%d %H:%M')
                             else:
                                 timestamp = datetime.now()
-                        except:
+                        except (ValueError, TypeError):
                             timestamp = datetime.now()
 
                         # 감성 분석

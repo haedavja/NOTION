@@ -195,7 +195,7 @@ class DartMonitor:
                             submit_date = datetime.strptime(submit_text, '%Y.%m.%d')
                         else:
                             submit_date = datetime.now()
-                    except:
+                    except (ValueError, TypeError):
                         submit_date = datetime.now()
 
                     if submit_date < cutoff_date:

@@ -23,9 +23,9 @@ class APICache:
         self._lock = threading.Lock()
 
     def _make_key(self, func_name: str, args: tuple, kwargs: dict) -> str:
-        """캐시 키 생성"""
+        """캐시 키 생성 (SHA256)"""
         key_data = f"{func_name}:{args}:{sorted(kwargs.items())}"
-        return hashlib.md5(key_data.encode()).hexdigest()
+        return hashlib.sha256(key_data.encode()).hexdigest()[:32]
 
     def get(self, key: str) -> Optional[Any]:
         """캐시에서 가져오기"""

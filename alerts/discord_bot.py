@@ -4,9 +4,12 @@
 """
 
 import os
+import logging
 from typing import Dict, List, Optional
 from datetime import datetime
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 try:
     import requests
@@ -53,7 +56,7 @@ class DiscordNotifier:
         self.enabled = bool(self.webhook_url)
 
         if not self.enabled:
-            print("Warning: 디스코드 웹훅이 설정되지 않았습니다. DISCORD_WEBHOOK_URL을 설정하세요.")
+            logger.warning("디스코드 웹훅이 설정되지 않았습니다. DISCORD_WEBHOOK_URL을 설정하세요.")
 
     def send_embed(self, embed: DiscordEmbed, username: str = "투자 알리미") -> bool:
         """
@@ -67,7 +70,7 @@ class DiscordNotifier:
             성공 여부
         """
         if not self.enabled:
-            print(f"[Discord Disabled] {embed.title}: {embed.description}")
+            logger.debug(f"[Discord Disabled] {embed.title}: {embed.description}")
             return False
 
         if not REQUESTS_AVAILABLE:
@@ -105,13 +108,13 @@ class DiscordNotifier:
             )
             return response.status_code == 204
         except Exception as e:
-            print(f"디스코드 전송 실패: {e}")
+            logger.error(f"디스코드 전송 실패: {e}")
             return False
 
     def send_text(self, text: str, username: str = "투자 알리미") -> bool:
         """간단한 텍스트 전송"""
         if not self.enabled:
-            print(f"[Discord Disabled] {text}")
+            logger.debug(f"[Discord Disabled] {text}")
             return False
 
         payload = {
@@ -127,7 +130,7 @@ class DiscordNotifier:
             )
             return response.status_code == 204
         except Exception as e:
-            print(f"디스코드 전송 실패: {e}")
+            logger.error(f"디스코드 전송 실패: {e}")
             return False
 
     def send_news_alert(self, title: str, summary: str,

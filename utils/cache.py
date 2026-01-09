@@ -7,10 +7,9 @@ import time
 import functools
 import hashlib
 import json
-import pickle
 import logging
 from typing import Any, Callable, Optional, Dict, TypeVar, Generic
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Lock
@@ -137,7 +136,7 @@ class MemoryCache:
 
 
 class FileCache:
-    """파일 기반 캐시"""
+    """파일 기반 캐시 (스레드 안전)"""
 
     def __init__(self, cache_dir: str = None, default_ttl: int = 3600):
         if cache_dir is None:
@@ -146,84 +145,116 @@ class FileCache:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.default_ttl = default_ttl
+        self._lock = Lock()  # 파일 작업 동기화
 
     def _get_path(self, key: str) -> Path:
         """키에 해당하는 파일 경로"""
-        # 키를 해시하여 파일명 생성
-        hash_key = hashlib.md5(key.encode()).hexdigest()
-        return self.cache_dir / f"{hash_key}.cache"
+        # 키를 SHA256으로 해시하여 파일명 생성 (MD5 대신)
+        hash_key = hashlib.sha256(key.encode()).hexdigest()[:32]
+        return self.cache_dir / f"{hash_key}.cache.json"
 
     def get(self, key: str) -> Optional[Any]:
-        """값 조회"""
+        """값 조회 (스레드 안전)"""
         path = self._get_path(key)
 
-        if not path.exists():
-            return None
-
-        try:
-            with open(path, 'rb') as f:
-                entry = pickle.load(f)
-
-            if entry.is_expired:
-                path.unlink()
+        with self._lock:
+            if not path.exists():
+                # 레거시 pickle 파일 확인 및 마이그레이션
+                legacy_path = self.cache_dir / f"{hashlib.md5(key.encode()).hexdigest()}.cache"
+                if legacy_path.exists():
+                    try:
+                        legacy_path.unlink()  # 레거시 파일 삭제
+                    except Exception:
+                        pass
                 return None
 
-            return entry.value
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
 
-        except Exception as e:
-            logger.debug(f"캐시 읽기 실패 ({key}): {e}")
-            return None
+                # 만료 확인
+                if time.time() > data['expires_at']:
+                    path.unlink()
+                    return None
+
+                return data['value']
+
+            except Exception as e:
+                logger.debug(f"캐시 읽기 실패 ({key}): {e}")
+                return None
 
     def set(self, key: str, value: Any, ttl: int = None) -> None:
-        """값 저장"""
+        """값 저장 (JSON 형식, 스레드 안전)"""
         ttl = ttl or self.default_ttl
         now = time.time()
 
-        entry = CacheEntry(
-            value=value,
-            created_at=now,
-            expires_at=now + ttl
-        )
+        # JSON 직렬화 가능한 데이터만 저장
+        data = {
+            'value': value,
+            'created_at': now,
+            'expires_at': now + ttl,
+            'hits': 0
+        }
 
         path = self._get_path(key)
 
-        try:
-            with open(path, 'wb') as f:
-                pickle.dump(entry, f)
-        except Exception as e:
-            logger.warning(f"캐시 저장 실패 ({key}): {e}")
+        with self._lock:
+            try:
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, default=str)
+            except Exception as e:
+                logger.warning(f"캐시 저장 실패 ({key}): {e}")
 
     def delete(self, key: str) -> bool:
-        """값 삭제"""
+        """값 삭제 (스레드 안전)"""
         path = self._get_path(key)
-        if path.exists():
-            path.unlink()
-            return True
-        return False
+        with self._lock:
+            if path.exists():
+                path.unlink()
+                return True
+            return False
 
     def clear(self) -> None:
-        """전체 삭제"""
-        for path in self.cache_dir.glob("*.cache"):
-            try:
-                path.unlink()
-            except Exception:
-                pass
+        """전체 삭제 (스레드 안전)"""
+        with self._lock:
+            # JSON 캐시 파일 삭제
+            for path in self.cache_dir.glob("*.cache.json"):
+                try:
+                    path.unlink()
+                except Exception:
+                    pass
+            # 레거시 pickle 캐시 파일도 삭제
+            for path in self.cache_dir.glob("*.cache"):
+                try:
+                    path.unlink()
+                except Exception:
+                    pass
 
     def cleanup_expired(self) -> int:
-        """만료된 캐시 정리"""
+        """만료된 캐시 정리 (스레드 안전)"""
         removed = 0
 
-        for path in self.cache_dir.glob("*.cache"):
-            try:
-                with open(path, 'rb') as f:
-                    entry = pickle.load(f)
+        with self._lock:
+            # JSON 캐시 파일 정리
+            for path in self.cache_dir.glob("*.cache.json"):
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
 
-                if entry.is_expired:
-                    path.unlink()
-                    removed += 1
+                    if time.time() > data.get('expires_at', 0):
+                        path.unlink()
+                        removed += 1
 
-            except Exception:
-                # 손상된 캐시 파일 삭제
+                except Exception:
+                    # 손상된 캐시 파일 삭제
+                    try:
+                        path.unlink()
+                        removed += 1
+                    except Exception:
+                        pass
+
+            # 레거시 pickle 캐시 파일 삭제
+            for path in self.cache_dir.glob("*.cache"):
                 try:
                     path.unlink()
                     removed += 1

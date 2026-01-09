@@ -474,3 +474,197 @@ def validate_backtest_input(
     ))
 
     return validator
+
+
+# ===== 보안 관련 유틸리티 =====
+
+class Sanitizer:
+    """입력값 새니타이저"""
+
+    # HTML 이스케이프 문자
+    HTML_ESCAPE_MAP = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#x27;',
+        '/': '&#x2F;',
+    }
+
+    @staticmethod
+    def html_escape(text: str) -> str:
+        """HTML 특수문자 이스케이프 (XSS 방지)"""
+        if not text:
+            return text
+        for char, escape in Sanitizer.HTML_ESCAPE_MAP.items():
+            text = text.replace(char, escape)
+        return text
+
+    @staticmethod
+    def strip_html_tags(text: str) -> str:
+        """HTML 태그 제거"""
+        if not text:
+            return text
+        return re.sub(r'<[^>]+>', '', text)
+
+    @staticmethod
+    def sanitize_filename(filename: str) -> str:
+        """파일명 새니타이즈 (위험 문자 제거)"""
+        if not filename:
+            return filename
+
+        # 경로 탐색 방지
+        filename = filename.replace('..', '').replace('/', '').replace('\\', '')
+
+        # 허용 문자만 남기기 (알파벳, 숫자, 한글, -, _, .)
+        sanitized = re.sub(r'[^\w가-힣\-_.]', '', filename)
+
+        # 빈 문자열이면 기본값
+        if not sanitized:
+            return 'unnamed_file'
+
+        return sanitized[:255]  # 최대 길이 제한
+
+    @staticmethod
+    def sanitize_path(path: str, allowed_base: str = None) -> Optional[str]:
+        """파일 경로 새니타이즈 (경로 탐색 공격 방지)"""
+        if not path:
+            return None
+
+        try:
+            from pathlib import Path as PathLib
+
+            # 절대 경로로 정규화
+            abs_path = PathLib(path).resolve()
+
+            # 경로 탐색 시도 감지
+            if '..' in path:
+                return None
+
+            # 허용된 기본 경로 확인
+            if allowed_base:
+                base = PathLib(allowed_base).resolve()
+                if not str(abs_path).startswith(str(base)):
+                    return None
+
+            return str(abs_path)
+
+        except Exception:
+            return None
+
+    @staticmethod
+    def sanitize_sql_identifier(identifier: str) -> str:
+        """SQL 식별자 새니타이즈 (SQL 인젝션 방지)"""
+        if not identifier:
+            return identifier
+
+        # 알파벳, 숫자, 언더스코어만 허용
+        sanitized = re.sub(r'[^\w]', '', identifier)
+
+        # SQL 예약어 방지 (접두사 추가)
+        sql_keywords = {'select', 'insert', 'update', 'delete', 'drop', 'union', 'where'}
+        if sanitized.lower() in sql_keywords:
+            sanitized = f"col_{sanitized}"
+
+        return sanitized[:64]  # 최대 길이 제한
+
+
+class PathValidator:
+    """파일 경로 검증"""
+
+    # 허용된 확장자 화이트리스트
+    ALLOWED_EXTENSIONS = {
+        'data': {'.json', '.csv', '.xlsx', '.xls'},
+        'image': {'.png', '.jpg', '.jpeg', '.gif', '.webp'},
+        'document': {'.pdf', '.txt', '.md'},
+    }
+
+    @staticmethod
+    def validate_file_path(
+        path: str,
+        field_name: str = "파일 경로",
+        allowed_extensions: set = None,
+        must_exist: bool = False,
+        max_path_length: int = 260
+    ) -> ValidationResult:
+        """파일 경로 유효성 검사"""
+        result = ValidationResult(is_valid=True)
+
+        if not path:
+            result.add_error(f"{field_name}은(는) 필수입니다.")
+            return result
+
+        # 경로 길이 제한
+        if len(path) > max_path_length:
+            result.add_error(f"{field_name}은(는) {max_path_length}자를 초과할 수 없습니다.")
+            return result
+
+        # 경로 탐색 공격 방지
+        if '..' in path:
+            result.add_error(f"{field_name}에 허용되지 않은 문자가 포함되어 있습니다.")
+            return result
+
+        # Null 바이트 인젝션 방지
+        if '\x00' in path:
+            result.add_error(f"{field_name}에 허용되지 않은 문자가 포함되어 있습니다.")
+            return result
+
+        try:
+            from pathlib import Path as PathLib
+            path_obj = PathLib(path)
+
+            # 확장자 검사
+            if allowed_extensions:
+                if path_obj.suffix.lower() not in allowed_extensions:
+                    ext_list = ', '.join(allowed_extensions)
+                    result.add_error(f"{field_name}은(는) 다음 확장자만 허용됩니다: {ext_list}")
+
+            # 존재 여부 확인
+            if must_exist and not path_obj.exists():
+                result.add_error(f"{field_name}이(가) 존재하지 않습니다.")
+
+            result.sanitized_value = str(path_obj.resolve())
+
+        except Exception as e:
+            result.add_error(f"{field_name}이(가) 유효하지 않습니다.")
+
+        return result
+
+    @staticmethod
+    def validate_directory(
+        path: str,
+        field_name: str = "디렉토리",
+        must_exist: bool = False,
+        create_if_missing: bool = False
+    ) -> ValidationResult:
+        """디렉토리 경로 유효성 검사"""
+        result = ValidationResult(is_valid=True)
+
+        if not path:
+            result.add_error(f"{field_name}은(는) 필수입니다.")
+            return result
+
+        # 경로 탐색 공격 방지
+        if '..' in path:
+            result.add_error(f"{field_name}에 허용되지 않은 문자가 포함되어 있습니다.")
+            return result
+
+        try:
+            from pathlib import Path as PathLib
+            path_obj = PathLib(path)
+
+            if must_exist and not path_obj.exists():
+                if create_if_missing:
+                    path_obj.mkdir(parents=True, exist_ok=True)
+                else:
+                    result.add_error(f"{field_name}이(가) 존재하지 않습니다.")
+
+            if path_obj.exists() and not path_obj.is_dir():
+                result.add_error(f"{field_name}은(는) 디렉토리가 아닙니다.")
+
+            result.sanitized_value = str(path_obj.resolve())
+
+        except Exception as e:
+            result.add_error(f"{field_name}이(가) 유효하지 않습니다.")
+
+        return result

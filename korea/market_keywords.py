@@ -3,12 +3,15 @@
 네이버 금융, 한경 등에서 인기 검색어/테마 크롤링
 """
 
+import logging
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import re
 import json
+
+logger = logging.getLogger(__name__)
 
 
 class MarketKeywordCollector:
@@ -36,7 +39,7 @@ class MarketKeywordCollector:
             self._cache_time = now
             return data
         except Exception as e:
-            print(f"키워드 수집 실패 ({key}): {e}")
+            logger.warning(f"키워드 수집 실패 ({key}): {e}")
             return self._cache.get(key, [])
 
     def get_naver_popular_stocks(self) -> List[Dict]:
@@ -69,7 +72,7 @@ class MarketKeywordCollector:
                                 'type': 'stock'
                             })
                 return results
-            except:
+            except Exception:
                 return []
 
         return self._get_cached_or_fetch('naver_popular', fetch)
@@ -96,7 +99,7 @@ class MarketKeywordCollector:
                             # 변동률 파싱
                             try:
                                 change_val = float(change_pct.replace('%', '').replace('+', ''))
-                            except:
+                            except (ValueError, AttributeError):
                                 change_val = 0
 
                             results.append({
@@ -106,7 +109,7 @@ class MarketKeywordCollector:
                                 'type': 'theme'
                             })
                 return results
-            except:
+            except Exception:
                 return []
 
         return self._get_cached_or_fetch('naver_themes', fetch)
@@ -140,7 +143,7 @@ class MarketKeywordCollector:
                 # 빈도순 정렬
                 sorted_kw = sorted(keywords.items(), key=lambda x: -x[1])
                 return [{'keyword': kw, 'count': cnt, 'type': 'news'} for kw, cnt in sorted_kw[:10]]
-            except:
+            except Exception:
                 return []
 
         return self._get_cached_or_fetch('hankyung', fetch)
