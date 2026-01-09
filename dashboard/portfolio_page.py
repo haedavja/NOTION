@@ -175,6 +175,38 @@ KOREAN_STOCKS = {
     'HD현대중공업': '329180.KS',
     '한화에어로스페이스': '012450.KS',
     '한화에어로': '012450.KS',
+    # 추가 종목
+    '한국전력': '015760.KS',
+    '한전': '015760.KS',
+    'SK텔레콤': '017670.KS',
+    'SKT': '017670.KS',
+    'KT': '030200.KS',
+    'LG유플러스': '032640.KS',
+    '한국가스공사': '036460.KS',
+    '가스공사': '036460.KS',
+    '하나금융지주': '086790.KS',
+    '하나금융': '086790.KS',
+    '우리금융지주': '316140.KS',
+    '우리금융': '316140.KS',
+    '기업은행': '024110.KS',
+    'IBK': '024110.KS',
+    'LG전자': '066570.KS',
+    'LG': '003550.KS',
+    'SK': '034730.KS',
+    'SK이노베이션': '096770.KS',
+    '한화오션': '042660.KS',
+    '한국조선해양': '009540.KS',
+    '고려아연': '010130.KS',
+    '에코프로': '086520.KS',
+    '에코프로비엠': '247540.KS',
+    'SK바이오팜': '326030.KS',
+    '한미약품': '128940.KS',
+    '유한양행': '000100.KS',
+    '하이브': '352820.KS',
+    'JYP': '035900.KQ',
+    '카카오게임즈': '293490.KQ',
+    '펄어비스': '263750.KQ',
+    '알테오젠': '196170.KQ',
 }
 
 # 미국 주요 종목 매핑
@@ -194,19 +226,32 @@ US_STOCKS = {
 
 
 def resolve_ticker(query: str):
-    """종목명/티커 검색 -> 티커 반환"""
+    """종목명/티커 검색 -> 티커 반환 (KRX 검색 지원)"""
     if not query:
         return None
 
     query = query.strip()
 
-    # 한국 종목 매핑 확인
+    # 한국 종목 매핑 확인 (빠른 경로)
     if query in KOREAN_STOCKS:
         return KOREAN_STOCKS[query]
 
     # 미국 종목 매핑 확인
     if query in US_STOCKS:
         return US_STOCKS[query]
+
+    # KRX 검색으로 한국 종목 찾기
+    try:
+        from korea.krx_data import KRXDataCollector
+        krx = KRXDataCollector()
+        results = krx.search_stock(query, limit=1)
+        if results:
+            code = results[0]['code']
+            market = results[0].get('market', 'KOSPI')
+            suffix = '.KQ' if market == 'KOSDAQ' else '.KS'
+            return f"{code}{suffix}"
+    except Exception as e:
+        logger.debug(f"KRX 검색 실패: {e}")
 
     # 이미 티커 형식인 경우
     return query.upper()
