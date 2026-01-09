@@ -7,9 +7,13 @@ import streamlit as st
 import hashlib
 import json
 import os
+import secrets
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class SimpleAuth:
@@ -24,24 +28,56 @@ class SimpleAuth:
 
         self._load_config()
 
+    def _generate_initial_password(self) -> str:
+        """초기 랜덤 비밀번호 생성"""
+        # 안전한 랜덤 비밀번호 생성 (12자)
+        return secrets.token_urlsafe(9)  # 12자 URL-safe 문자열
+
     def _load_config(self):
         """설정 로드"""
         if self.config_path.exists():
-            with open(self.config_path, 'r') as f:
-                self.config = json.load(f)
+            try:
+                with open(self.config_path, 'r') as f:
+                    self.config = json.load(f)
+            except Exception as e:
+                logger.error(f"인증 설정 로드 실패: {e}")
+                self.config = self._create_default_config()
         else:
-            # 기본 설정 (비밀번호: admin)
-            self.config = {
-                'enabled': False,
-                'users': {
-                    'admin': {
-                        'password_hash': self._hash_password('admin'),
-                        'name': '관리자',
-                        'created_at': datetime.now().isoformat()
-                    }
+            # 초기 설정 - 랜덤 비밀번호 생성
+            self.config = self._create_default_config()
+            self._save_config()
+
+    def _create_default_config(self) -> Dict:
+        """기본 설정 생성 (랜덤 비밀번호)"""
+        initial_password = self._generate_initial_password()
+
+        # 초기 비밀번호를 파일에 저장 (최초 1회)
+        password_file = self.config_path.parent / "initial_password.txt"
+        with open(password_file, 'w') as f:
+            f.write(f"초기 비밀번호: {initial_password}\n")
+            f.write(f"생성 시간: {datetime.now().isoformat()}\n")
+            f.write("※ 로그인 후 즉시 비밀번호를 변경하세요.\n")
+
+        # 파일 권한 제한 (Linux/Mac)
+        try:
+            os.chmod(password_file, 0o600)
+        except Exception:
+            pass
+
+        logger.info(f"초기 비밀번호가 {password_file}에 저장되었습니다.")
+
+        return {
+            'enabled': False,
+            'password_change_required': True,
+            'users': {
+                'admin': {
+                    'password_hash': self._hash_password(initial_password),
+                    'name': '관리자',
+                    'created_at': datetime.now().isoformat(),
+                    'password_changed': False
                 }
             }
-            self._save_config()
+        }
 
     def _save_config(self):
         """설정 저장"""
@@ -129,7 +165,11 @@ def render_login_page() -> bool:
             else:
                 st.error("사용자명 또는 비밀번호가 잘못되었습니다.")
 
-    st.info("💡 기본 계정: admin / admin")
+    # 초기 비밀번호 안내 (보안을 위해 파일 위치만 안내)
+    password_file = Path.home() / ".notion_portfolio" / "initial_password.txt"
+    if password_file.exists():
+        st.info(f"💡 초기 비밀번호는 {password_file}에서 확인하세요.")
+
     return False
 
 

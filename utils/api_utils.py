@@ -1,22 +1,26 @@
 """
 API 유틸리티
-캐싱, 재시도 로직, 레이트 리미팅
+캐싱, 재시도 로직, 레이트 리미팅 (스레드 안전)
 """
 
 import time
 import functools
+import threading
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Callable, Optional
 import hashlib
-import json
+
+logger = logging.getLogger(__name__)
 
 
 class APICache:
-    """간단한 메모리 캐시"""
+    """스레드 안전 메모리 캐시"""
 
-    def __init__(self, default_ttl: int = 300):  # 기본 5분
+    def __init__(self, default_ttl: int = 300):
         self._cache: Dict[str, Dict] = {}
         self.default_ttl = default_ttl
+        self._lock = threading.Lock()
 
     def _make_key(self, func_name: str, args: tuple, kwargs: dict) -> str:
         """캐시 키 생성"""
@@ -25,33 +29,37 @@ class APICache:
 
     def get(self, key: str) -> Optional[Any]:
         """캐시에서 가져오기"""
-        if key in self._cache:
-            entry = self._cache[key]
-            if datetime.now() < entry['expires']:
-                return entry['data']
-            else:
-                del self._cache[key]
+        with self._lock:
+            if key in self._cache:
+                entry = self._cache[key]
+                if datetime.now() < entry['expires']:
+                    return entry['data']
+                else:
+                    del self._cache[key]
         return None
 
     def set(self, key: str, data: Any, ttl: int = None):
         """캐시에 저장"""
         ttl = ttl or self.default_ttl
-        self._cache[key] = {
-            'data': data,
-            'expires': datetime.now() + timedelta(seconds=ttl),
-            'created': datetime.now()
-        }
+        with self._lock:
+            self._cache[key] = {
+                'data': data,
+                'expires': datetime.now() + timedelta(seconds=ttl),
+                'created': datetime.now()
+            }
 
     def clear(self):
         """캐시 비우기"""
-        self._cache.clear()
+        with self._lock:
+            self._cache.clear()
 
     def cleanup(self):
         """만료된 항목 정리"""
         now = datetime.now()
-        expired = [k for k, v in self._cache.items() if now >= v['expires']]
-        for k in expired:
-            del self._cache[k]
+        with self._lock:
+            expired = [k for k, v in self._cache.items() if now >= v['expires']]
+            for k in expired:
+                del self._cache[k]
 
 
 # 전역 캐시 인스턴스
@@ -90,38 +98,44 @@ def retry_on_failure(max_retries: int = 3, delay: float = 1.0, backoff: float = 
                     last_exception = e
                     if attempt < max_retries - 1:
                         sleep_time = delay * (backoff ** attempt)
-                        print(f"[Retry] {func.__name__} 실패 (시도 {attempt + 1}/{max_retries}), {sleep_time:.1f}초 후 재시도...")
+                        logger.warning(
+                            f"{func.__name__} 실패 (시도 {attempt + 1}/{max_retries}), "
+                            f"{sleep_time:.1f}초 후 재시도..."
+                        )
                         time.sleep(sleep_time)
 
+            logger.error(f"{func.__name__} 최종 실패: {last_exception}")
             raise last_exception
         return wrapper
     return decorator
 
 
 class RateLimiter:
-    """레이트 리미터"""
+    """스레드 안전 레이트 리미터"""
 
     def __init__(self, calls_per_minute: int = 60):
         self.calls_per_minute = calls_per_minute
         self._call_times: list = []
+        self._lock = threading.Lock()
 
     def wait_if_needed(self):
         """필요 시 대기"""
-        now = datetime.now()
-        minute_ago = now - timedelta(minutes=1)
+        with self._lock:
+            now = datetime.now()
+            minute_ago = now - timedelta(minutes=1)
 
-        # 1분 이전 호출 제거
-        self._call_times = [t for t in self._call_times if t > minute_ago]
+            # 1분 이전 호출 제거
+            self._call_times = [t for t in self._call_times if t > minute_ago]
 
-        if len(self._call_times) >= self.calls_per_minute:
-            # 대기 필요
-            oldest = self._call_times[0]
-            wait_time = (oldest + timedelta(minutes=1) - now).total_seconds()
-            if wait_time > 0:
-                print(f"[RateLimit] {wait_time:.1f}초 대기...")
-                time.sleep(wait_time)
+            if len(self._call_times) >= self.calls_per_minute:
+                # 대기 필요
+                oldest = self._call_times[0]
+                wait_time = (oldest + timedelta(minutes=1) - now).total_seconds()
+                if wait_time > 0:
+                    logger.debug(f"레이트 리밋: {wait_time:.1f}초 대기...")
+                    time.sleep(wait_time)
 
-        self._call_times.append(now)
+            self._call_times.append(datetime.now())
 
 
 def rate_limited(calls_per_minute: int = 60):

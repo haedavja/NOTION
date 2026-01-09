@@ -4,10 +4,13 @@
 """
 
 import os
+import logging
 import asyncio
 from typing import Dict, List, Optional
 from datetime import datetime
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 try:
     import requests
@@ -63,7 +66,7 @@ class TelegramNotifier:
         self.enabled = bool(self.bot_token and self.chat_id)
 
         if not self.enabled:
-            print("Warning: 텔레그램 설정이 없습니다. TELEGRAM_BOT_TOKEN과 TELEGRAM_CHAT_ID를 설정하세요.")
+            logger.warning("텔레그램 설정이 없습니다. TELEGRAM_BOT_TOKEN과 TELEGRAM_CHAT_ID를 설정하세요.")
 
     def _call_api(self, method: str, params: Dict) -> Dict:
         """텔레그램 API 호출"""
@@ -86,7 +89,7 @@ class TelegramNotifier:
             성공 여부
         """
         if not self.enabled:
-            print(f"[Telegram Disabled] {message.title}: {message.body}")
+            logger.debug(f"[Telegram Disabled] {message.title}: {message.body}")
             return False
 
         emoji = self.CATEGORY_EMOJI.get(message.category, '📌')
@@ -111,7 +114,7 @@ class TelegramNotifier:
             result = self._call_api('sendMessage', params)
             return result.get('ok', False)
         except Exception as e:
-            print(f"텔레그램 전송 실패: {e}")
+            logger.error(f"텔레그램 전송 실패: {e}")
             return False
 
     def send_text(self, text: str, category: str = "general") -> bool:
@@ -236,10 +239,10 @@ class TelegramNotifier:
             result = self._call_api('getMe', {})
             if result.get('ok'):
                 bot_name = result['result']['username']
-                print(f"텔레그램 봇 연결 성공: @{bot_name}")
+                logger.info(f"텔레그램 봇 연결 성공: @{bot_name}")
                 return True
         except Exception as e:
-            print(f"텔레그램 연결 실패: {e}")
+            logger.error(f"텔레그램 연결 실패: {e}")
 
         return False
 

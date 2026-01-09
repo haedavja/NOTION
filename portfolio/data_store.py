@@ -5,6 +5,7 @@
 
 import json
 import os
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -12,6 +13,8 @@ from dataclasses import asdict
 
 from .portfolio import Portfolio, Position, AssetType
 from .thesis_evaluator import ThesisReport, ThesisReportHistory
+
+logger = logging.getLogger(__name__)
 
 
 class DataStore:
@@ -65,7 +68,7 @@ class DataStore:
 
             return True
         except Exception as e:
-            print(f"포트폴리오 저장 실패: {e}")
+            logger.error(f"포트폴리오 저장 실패: {e}")
             return False
 
     def load_portfolio(self) -> Optional[Portfolio]:
@@ -128,7 +131,7 @@ class DataStore:
 
             return portfolio
         except Exception as e:
-            print(f"포트폴리오 로드 실패: {e}")
+            logger.error(f"포트폴리오 로드 실패: {e}")
             return None
 
     # ===== 보고서 저장/로드 =====
@@ -148,7 +151,7 @@ class DataStore:
 
             return True
         except Exception as e:
-            print(f"보고서 저장 실패: {e}")
+            logger.error(f"보고서 저장 실패: {e}")
             return False
 
     def load_reports(self) -> Dict[str, ThesisReportHistory]:
@@ -170,7 +173,7 @@ class DataStore:
 
             return reports
         except Exception as e:
-            print(f"보고서 로드 실패: {e}")
+            logger.error(f"보고서 로드 실패: {e}")
             return {}
 
     # ===== 설정 저장/로드 =====
@@ -182,7 +185,7 @@ class DataStore:
                 json.dump(settings, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            print(f"설정 저장 실패: {e}")
+            logger.error(f"설정 저장 실패: {e}")
             return False
 
     def load_settings(self) -> Dict:
@@ -194,7 +197,7 @@ class DataStore:
             with open(self.settings_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"설정 로드 실패: {e}")
+            logger.error(f"설정 로드 실패: {e}")
             return {}
 
     # ===== 알림 저장/로드 =====
@@ -206,7 +209,7 @@ class DataStore:
                 json.dump(alerts, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            print(f"알림 저장 실패: {e}")
+            logger.error(f"알림 저장 실패: {e}")
             return False
 
     def load_alerts(self) -> List[Dict]:
@@ -218,7 +221,7 @@ class DataStore:
             with open(self.alerts_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"알림 로드 실패: {e}")
+            logger.error(f"알림 로드 실패: {e}")
             return []
 
     # ===== 유틸리티 =====
@@ -250,7 +253,7 @@ class DataStore:
 
             return True
         except Exception as e:
-            print(f"내보내기 실패: {e}")
+            logger.error(f"내보내기 실패: {e}")
             return False
 
     def import_all(self, import_path: str) -> bool:
@@ -273,7 +276,7 @@ class DataStore:
 
             return True
         except Exception as e:
-            print(f"가져오기 실패: {e}")
+            logger.error(f"가져오기 실패: {e}")
             return False
 
     def clear_all(self) -> bool:
@@ -284,7 +287,7 @@ class DataStore:
                     file.unlink()
             return True
         except Exception as e:
-            print(f"삭제 실패: {e}")
+            logger.error(f"삭제 실패: {e}")
             return False
 
 

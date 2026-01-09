@@ -5,6 +5,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import logging
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -21,6 +22,11 @@ from portfolio.thesis_evaluator import (
     ThesisReportHistory, ThesisReportManager
 )
 from portfolio.risk_monitor import RiskMonitor, AlertSeverity, AlertType
+from dashboard.input_validators import (
+    DashboardValidator, PositionValidator, sanitize
+)
+
+logger = logging.getLogger(__name__)
 
 # yfinance import (선택적)
 try:
@@ -109,7 +115,7 @@ def get_batch_prices(symbols: list):
                         except Exception:
                             pass
     except Exception as e:
-        print(f"Batch price error: {e}")
+        logger.warning(f"Batch price error: {e}")
         # 개별 조회로 fallback
         for sym in symbols:
             price = get_realtime_price(sym)
@@ -257,7 +263,7 @@ def search_stock(symbol: str):
             'market_cap': market_cap,
         }
     except Exception as e:
-        print(f"search_stock error for {ticker_symbol}: {e}")
+        logger.warning(f"search_stock error for {ticker_symbol}: {e}")
         return None
 
 
@@ -339,12 +345,19 @@ def render_portfolio_input():
     def do_search():
         query = st.session_state.get('stock_query_input', '')
         if query:
-            info = search_stock(query)
+            # 입력값 정제 (XSS 방지)
+            sanitized_query = sanitize(query, max_length=50)
+            if not sanitized_query:
+                st.session_state.search_error = "유효한 종목명을 입력하세요."
+                return
+
+            info = search_stock(sanitized_query)
             if info:
                 st.session_state.searched_stock = info
+                st.session_state.search_error = None
             else:
                 st.session_state.searched_stock = None
-                st.session_state.search_error = f"❌ '{query}' 종목을 찾을 수 없습니다."
+                st.session_state.search_error = f"❌ '{sanitized_query}' 종목을 찾을 수 없습니다."
         else:
             st.session_state.search_error = None
 
@@ -411,26 +424,47 @@ def render_portfolio_input():
                 st.caption(f"📊 목표가: ${target_p:,.2f} (+{target_pct:.0f}%) | 손절가: ${stop_p:,.2f} (-{stop_loss_pct:.0f}%)")
 
             if st.form_submit_button("✅ 포지션 추가", use_container_width=True, type="primary"):
-                thesis_enum = next((t for t in InvestmentThesis if t.value == thesis_type), InvestmentThesis.OTHER)
+                # 입력 유효성 검사
+                errors = []
 
-                position = Position(
-                    symbol=info['symbol'],
-                    name=info['name'],
-                    quantity=quantity,
-                    avg_cost=avg_cost,
-                    current_price=price,
-                    asset_type=AssetType.STOCK,
-                    thesis_type=thesis_enum,
-                    thesis_description=thesis_custom if thesis_custom else "",
-                    target_price=target_p if target_pct > 0 else None,
-                    stop_loss=stop_p if stop_loss_pct > 0 else None,
-                    time_horizon=time_horizon,
-                )
+                # 수량 검증
+                qty_result = DashboardValidator.validate_quantity(quantity)
+                if not qty_result.is_valid:
+                    errors.append(qty_result.error)
 
-                st.session_state.portfolio.add_position(position)
-                st.session_state.searched_stock = None
-                st.success(f"✅ {info['symbol']} 추가 완료!")
-                st.rerun()
+                # 평균 단가 검증
+                cost_result = DashboardValidator.validate_price(avg_cost, "매수가")
+                if not cost_result.is_valid:
+                    errors.append(cost_result.error)
+
+                # 투자 논리 텍스트 정제 (XSS 방지)
+                sanitized_thesis = sanitize(thesis_custom, max_length=500) if thesis_custom else ""
+
+                if errors:
+                    for err in errors:
+                        st.error(err)
+                else:
+                    thesis_enum = next((t for t in InvestmentThesis if t.value == thesis_type), InvestmentThesis.OTHER)
+
+                    position = Position(
+                        symbol=info['symbol'],
+                        name=info['name'],
+                        quantity=qty_result.value,
+                        avg_cost=cost_result.value,
+                        current_price=price,
+                        asset_type=AssetType.STOCK,
+                        thesis_type=thesis_enum,
+                        thesis_description=sanitized_thesis,
+                        target_price=target_p if target_pct > 0 else None,
+                        stop_loss=stop_p if stop_loss_pct > 0 else None,
+                        time_horizon=time_horizon,
+                    )
+
+                    st.session_state.portfolio.add_position(position)
+                    st.session_state.searched_stock = None
+                    logger.info(f"Position added: {info['symbol']}")
+                    st.success(f"✅ {info['symbol']} 추가 완료!")
+                    st.rerun()
     else:
         st.info("💡 종목명(현대차, 삼성) 또는 티커(AAPL, TSLA)를 입력하고 검색 버튼을 누르세요")
 

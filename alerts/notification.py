@@ -8,6 +8,7 @@ import json
 import smtplib
 import requests
 import logging
+import html
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
@@ -17,6 +18,13 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def escape_html(text: str) -> str:
+    """HTML 이스케이프 (XSS 방지)"""
+    if text is None:
+        return ""
+    return html.escape(str(text))
 
 
 @dataclass
@@ -118,7 +126,7 @@ class TelegramChannel(NotificationChannel):
             return response.status_code == 200
 
         except Exception as e:
-            print(f"텔레그램 전송 실패: {e}")
+            logger.error(f"텔레그램 전송 실패: {e}")
             return False
 
 
@@ -189,7 +197,7 @@ class SlackChannel(NotificationChannel):
             return response.status_code == 200
 
         except Exception as e:
-            print(f"슬랙 전송 실패: {e}")
+            logger.error(f"슬랙 전송 실패: {e}")
             return False
 
 
@@ -218,8 +226,13 @@ class EmailChannel(NotificationChannel):
             msg['From'] = self.username
             msg['To'] = self.to_email
 
-            # HTML 본문
-            html = f"""
+            # HTML 본문 (XSS 방지를 위해 사용자 입력 이스케이프)
+            safe_title = escape_html(message.title)
+            safe_body = escape_html(message.body)
+            safe_type = escape_html(message.type)
+            safe_timestamp = escape_html(message.timestamp)
+
+            html_content = f"""
             <html>
             <head>
                 <style>
@@ -233,34 +246,34 @@ class EmailChannel(NotificationChannel):
             </head>
             <body>
                 <div class="header">
-                    <h2>{message.title}</h2>
+                    <h2>{safe_title}</h2>
                 </div>
                 <div class="content">
-                    <div class="{message.type}">
-                        <p>{message.body}</p>
+                    <div class="{safe_type}">
+                        <p>{safe_body}</p>
                     </div>
             """
 
             if message.symbol:
-                html += f"<p><strong>종목:</strong> {message.symbol}</p>"
+                html_content += f"<p><strong>종목:</strong> {escape_html(message.symbol)}</p>"
 
             if message.data:
-                html += "<h4>상세 정보</h4><ul>"
+                html_content += "<h4>상세 정보</h4><ul>"
                 for key, value in message.data.items():
-                    html += f"<li><strong>{key}:</strong> {value}</li>"
-                html += "</ul>"
+                    html_content += f"<li><strong>{escape_html(key)}:</strong> {escape_html(value)}</li>"
+                html_content += "</ul>"
 
-            html += f"""
+            html_content += f"""
                 </div>
                 <div class="footer">
-                    <p>발송 시간: {message.timestamp}</p>
+                    <p>발송 시간: {safe_timestamp}</p>
                     <p>NOTION 포트폴리오 관리 시스템</p>
                 </div>
             </body>
             </html>
             """
 
-            msg.attach(MIMEText(html, 'html'))
+            msg.attach(MIMEText(html_content, 'html'))
 
             # SMTP 전송
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
@@ -271,7 +284,7 @@ class EmailChannel(NotificationChannel):
             return True
 
         except Exception as e:
-            print(f"이메일 전송 실패: {e}")
+            logger.error(f"이메일 전송 실패: {e}")
             return False
 
 

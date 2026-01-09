@@ -5,10 +5,14 @@
 
 import os
 import yaml
+import logging
+import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 from dataclasses import dataclass, field
 from functools import lru_cache
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -94,21 +98,29 @@ class Settings:
 
 
 class ConfigManager:
-    """설정 관리자"""
+    """설정 관리자 (스레드 안전)"""
 
     _instance: Optional['ConfigManager'] = None
     _settings: Optional[Settings] = None
+    _lock: threading.Lock = threading.Lock()
+    _initialized: bool = False
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._lock:
+                # Double-checked locking
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self):
-        if self._settings is None:
-            self._settings = Settings()
-            self._load_env()
-            self._load_yaml()
+        if not self._initialized:
+            with self._lock:
+                if not self._initialized:
+                    self._settings = Settings()
+                    self._load_env()
+                    self._load_yaml()
+                    ConfigManager._initialized = True
 
     def _load_env(self):
         """환경변수 로드"""
@@ -173,7 +185,7 @@ class ConfigManager:
                         setattr(self._settings.ui, key, value)
 
         except Exception as e:
-            print(f"Config load error: {e}")
+            logger.warning(f"설정 파일 로드 실패: {e}")
 
     def _save_yaml(self):
         """YAML 설정 저장"""
@@ -208,7 +220,7 @@ class ConfigManager:
             with open(self._settings.config_file, 'w', encoding='utf-8') as f:
                 yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
         except Exception as e:
-            print(f"Config save error: {e}")
+            logger.error(f"설정 파일 저장 실패: {e}")
 
     @property
     def settings(self) -> Settings:

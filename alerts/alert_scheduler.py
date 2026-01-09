@@ -3,12 +3,15 @@
 주기적으로 위험 모니터링 및 알림 전송
 """
 
+import logging
 import threading
 import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Callable, Optional
 import json
 import os
+
+logger = logging.getLogger(__name__)
 
 try:
     from portfolio.risk_monitor import RiskMonitor, RiskAlert, AlertSeverity
@@ -52,14 +55,14 @@ class AlertScheduler:
         self._portfolio = portfolio
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
-        print(f"[AlertScheduler] 시작됨 (체크 주기: {self.check_interval}초)")
+        logger.info(f"[AlertScheduler] 시작됨 (체크 주기: {self.check_interval}초)")
 
     def stop(self):
         """스케줄러 중지"""
         self.running = False
         if self._thread:
             self._thread.join(timeout=5)
-        print("[AlertScheduler] 중지됨")
+        logger.info("[AlertScheduler] 중지됨")
 
     def _run_loop(self):
         """메인 루프"""
@@ -67,7 +70,7 @@ class AlertScheduler:
             try:
                 self._check_alerts()
             except Exception as e:
-                print(f"[AlertScheduler] 체크 오류: {e}")
+                logger.error(f"[AlertScheduler] 체크 오류: {e}")
 
             time.sleep(self.check_interval)
 
@@ -120,7 +123,7 @@ class AlertScheduler:
             try:
                 callback(alert)
             except Exception as e:
-                print(f"[AlertScheduler] 콜백 오류: {e}")
+                logger.error(f"[AlertScheduler] 콜백 오류: {e}")
 
         # 텔레그램 전송
         if self.settings['telegram_enabled']:
@@ -163,10 +166,10 @@ class AlertScheduler:
             }
 
             requests.post(url, data=data, timeout=10)
-            print(f"[Telegram] 알림 전송: {alert.title}")
+            logger.info(f"[Telegram] 알림 전송: {alert.title}")
 
         except Exception as e:
-            print(f"[Telegram] 전송 실패: {e}")
+            logger.error(f"[Telegram] 전송 실패: {e}")
 
     def _send_discord(self, alert: RiskAlert):
         """Discord로 알림 전송"""
@@ -198,10 +201,10 @@ class AlertScheduler:
 
             data = {'embeds': [embed]}
             requests.post(webhook_url, json=data, timeout=10)
-            print(f"[Discord] 알림 전송: {alert.title}")
+            logger.info(f"[Discord] 알림 전송: {alert.title}")
 
         except Exception as e:
-            print(f"[Discord] 전송 실패: {e}")
+            logger.error(f"[Discord] 전송 실패: {e}")
 
     def get_alert_history(self, limit: int = 50) -> List[Dict]:
         """최근 알림 히스토리"""

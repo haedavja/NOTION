@@ -4,11 +4,14 @@
 """
 
 import time
+import logging
 import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 try:
     import yfinance as yf
@@ -78,7 +81,7 @@ class PriceAlertSystem:
     def add_alert(self, alert: PriceAlert):
         """알림 추가"""
         self.alerts.append(alert)
-        print(f"알림 추가: {alert.name}")
+        logger.info(f"알림 추가: {alert.name}")
 
     def add_price_alert(self, symbol: str, condition: str, value: float,
                        name: Optional[str] = None, repeat: bool = False) -> PriceAlert:
@@ -136,7 +139,7 @@ class PriceAlertSystem:
                 'timestamp': datetime.now(),
             }
         except Exception as e:
-            print(f"가격 조회 실패 ({symbol}): {e}")
+            logger.warning(f"가격 조회 실패 ({symbol}): {e}")
             return None
 
     def _update_prices(self):
@@ -218,7 +221,7 @@ class PriceAlertSystem:
                 change_pct=change_pct,
             )
 
-        print(f"[Price Alert] {alert.name}: ${price:.2f} ({change_pct:+.2f}%)")
+        logger.info(f"[Price Alert] {alert.name}: ${price:.2f} ({change_pct:+.2f}%)")
 
         # 상태 업데이트
         alert.triggered = True
@@ -248,15 +251,15 @@ class PriceAlertSystem:
     def start(self, interval_seconds: int = 60):
         """알림 시스템 시작"""
         if not SCHEDULE_AVAILABLE:
-            print("schedule 라이브러리가 필요합니다. pip install schedule")
+            logger.error("schedule 라이브러리가 필요합니다. pip install schedule")
             return
 
         if not YFINANCE_AVAILABLE:
-            print("yfinance 라이브러리가 필요합니다.")
+            logger.error("yfinance 라이브러리가 필요합니다.")
             return
 
         if self.is_running:
-            print("이미 실행 중입니다.")
+            logger.warning("이미 실행 중입니다.")
             return
 
         self.is_running = True
@@ -276,7 +279,7 @@ class PriceAlertSystem:
         self._thread = threading.Thread(target=run_schedule, daemon=True)
         self._thread.start()
 
-        print(f"가격 알림 시스템 시작됨 (간격: {interval_seconds}초)")
+        logger.info(f"가격 알림 시스템 시작됨 (간격: {interval_seconds}초)")
 
     def stop(self):
         """알림 시스템 중지"""
@@ -286,7 +289,7 @@ class PriceAlertSystem:
         if self._thread:
             self._thread.join(timeout=5)
 
-        print("가격 알림 시스템 중지됨")
+        logger.info("가격 알림 시스템 중지됨")
 
     def get_status(self) -> Dict:
         """상태 조회"""
@@ -326,7 +329,7 @@ def example_usage():
     system.start(interval_seconds=60)
 
     # 상태 확인
-    print(system.get_status())
+    logger.info(system.get_status())
 
     # 중지
     # system.stop()
