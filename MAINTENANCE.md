@@ -1,5 +1,104 @@
 # NOTION 시장 예측 시스템 - 유지보수 가이드
 
+> **최종 수정**: 2026-01
+> **버전**: v2.5 (한국 주식 중심 대시보드)
+
+## 🔥 핵심 기능 (메인 대시보드)
+
+### 1. SNS 스타일 시장 토론
+**위치**: `dashboard/market_overview_page.py`
+
+6명의 트레이더 페르소나가 현재 시장을 분석하고 토론합니다.
+
+**페르소나 목록**:
+| 이름 | 역할 | 색상 | 아바타 |
+|:---:|:---:|:---:|:---:|
+| 강세론자 김프로 | 낙관적 전망 | `#22c55e` | 📈 |
+| 신중파 이차장 | 보수적 분석 | `#ef4444` | 📉 |
+| 차트장인 박대리 | 기술적 분석 | `#3b82f6` | 📊 |
+| 거시경제 최박사 | 매크로 분석 | `#8b5cf6` | 🎓 |
+| 개미투자자 정씨 | 개인 관점 | `#f59e0b` | 🐜 |
+| 퀀트봇 Q-1 | 데이터 기반 | `#06b6d4` | 🤖 |
+
+**핵심 함수**:
+```python
+# 토론 생성
+generate_sns_market_discussion(metrics, condition, gainers, losers, selected_stock)
+
+# 메인 대시보드용 컴팩트 버전 (app.py)
+render_sns_discussion_compact(metrics, condition, gainers, losers)
+```
+
+**새 페르소나 추가 방법**:
+1. `TRADER_PERSONAS` 딕셔너리에 추가
+2. `generate_sns_market_discussion()`에 해당 로직 추가
+
+---
+
+### 2. Snowflake 분석 (6축 레이더 차트)
+**위치**: `analysis/snowflake_viz.py`, `dashboard/snowflake_page.py`
+
+Simply Wall St 스타일 5축 레이더 차트로 종목 특성을 시각화합니다.
+
+**5가지 평가 축**:
+| 축 | 설명 | 평가 기준 |
+|:---:|:---:|:---|
+| 가치 (Value) | 밸류에이션 | PER, PBR |
+| 미래 (Future) | 성장성 | 매출/이익 성장률 |
+| 과거 (Past) | 과거 수익 | ROE, 영업이익률 |
+| 배당 (Dividend) | 배당 매력 | 배당수익률 |
+| 건전성 (Health) | 재무 안정성 | 부채비율, 유동비율 |
+
+**핵심 함수**:
+```python
+# 점수 계산
+scores = snowflake_analyzer.calculate_scores(fundamentals=stock_data, sector='default')
+
+# 차트 생성
+fig = create_snowflake_chart(scores, stock_name)
+
+# 등급 판정
+grade, emoji, description = get_overall_rating(scores)
+```
+
+**메인 대시보드에서 전체 종목 검색 지원**:
+- `_get_stock_fundamentals_for_snowflake(code)` - 실제 데이터 조회
+- `KoreanStockAnalyzer.get_fundamentals(code)` - pykrx에서 PER/PBR/배당 조회
+
+---
+
+### 3. 잠재적 요인(Catalyst) 분석
+**위치**: `analysis/potential_analyzer.py`, `dashboard/potential_page.py`
+
+아직 발생하지 않았지만 주가에 큰 영향을 줄 수 있는 잠재적 요인을 분석합니다.
+
+**촉매 유형 (CatalystType)**:
+- 상승: 실적 서프라이즈, 신제품, 시장 확대, 규제 승인, 파트너십, 저평가 해소
+- 하락: 실적 미스, 경쟁 심화, 규제 리스크, 부채/유동성, 고평가 부담
+
+**핵심 클래스**:
+```python
+class PotentialAnalyzer:
+    def analyze(self, symbol, name, news, financial_data, technical_data) -> PotentialAnalysis
+
+class PotentialAnalysis:
+    bullish_catalysts: List[PotentialCatalyst]  # 상승 촉매
+    bearish_catalysts: List[PotentialCatalyst]  # 하락 촉매
+    bullish_score: float  # 상승 점수 (0-100)
+    bearish_score: float  # 하락 점수 (0-100)
+```
+
+**Probability enum (Python 3.13+ 호환)**:
+```python
+class Probability(Enum):
+    def __init__(self, korean: str, prob_value: float, color: str):
+        self.korean = korean
+        self.prob_value = prob_value  # 'value' 대신 'prob_value' 사용
+        self.color = color
+```
+
+---
+
 ## 프로젝트 구조
 
 ```
