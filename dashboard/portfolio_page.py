@@ -225,35 +225,85 @@ US_STOCKS = {
 }
 
 
+def _is_korean_text(text: str) -> bool:
+    """한글 포함 여부 확인"""
+    return any('\uac00' <= c <= '\ud7a3' for c in text)
+
+
+def _is_ticker_format(text: str) -> bool:
+    """티커 형식인지 확인 (AAPL, 005930.KS 등)"""
+    text = text.upper()
+    # 이미 .KS, .KQ 포함
+    if '.KS' in text or '.KQ' in text:
+        return True
+    # 6자리 숫자 (한국 종목코드)
+    if text.isdigit() and len(text) == 6:
+        return True
+    # 영문 대문자만 (미국 티커)
+    if text.isalpha() and text.isupper() and len(text) <= 5:
+        return True
+    return False
+
+
 def resolve_ticker(query: str):
-    """종목명/티커 검색 -> 티커 반환 (KRX 검색 지원)"""
+    """
+    종목명/티커 검색 -> 티커 반환
+
+    검색 우선순위:
+    1. 이미 티커 형식이면 그대로 반환
+    2. 미국 종목 딕셔너리 확인
+    3. KRX 동적 검색 (전체 2500+ 종목)
+    4. 한국 종목 딕셔너리 폴백 (오프라인용)
+    """
     if not query:
         return None
 
     query = query.strip()
 
-    # 한국 종목 매핑 확인 (빠른 경로)
-    if query in KOREAN_STOCKS:
-        return KOREAN_STOCKS[query]
+    # 이미 티커 형식인 경우 바로 반환
+    if _is_ticker_format(query):
+        # 6자리 숫자면 .KS 추가
+        if query.isdigit() and len(query) == 6:
+            return f"{query}.KS"
+        return query.upper()
 
-    # 미국 종목 매핑 확인
+    # 미국 종목 매핑 확인 (한글이 아닌 경우)
+    if not _is_korean_text(query) and query.upper() in US_STOCKS:
+        return US_STOCKS[query.upper()]
+
+    # 미국 종목 한글명 확인
     if query in US_STOCKS:
         return US_STOCKS[query]
 
-    # KRX 검색으로 한국 종목 찾기
+    # === KRX 동적 검색 (메인 로직) ===
     try:
         from korea.krx_data import KRXDataCollector
         krx = KRXDataCollector()
         results = krx.search_stock(query, limit=1)
         if results:
             code = results[0]['code']
+            name = results[0]['name']
             market = results[0].get('market', 'KOSPI')
             suffix = '.KQ' if market == 'KOSDAQ' else '.KS'
-            return f"{code}{suffix}"
-    except Exception as e:
-        logger.debug(f"KRX 검색 실패: {e}")
+            ticker = f"{code}{suffix}"
 
-    # 이미 티커 형식인 경우
+            # 캐시에 추가 (다음 검색 시 빠른 조회)
+            if name not in KOREAN_STOCKS:
+                KOREAN_STOCKS[name] = ticker
+            if query not in KOREAN_STOCKS:
+                KOREAN_STOCKS[query] = ticker
+
+            logger.debug(f"KRX 검색 성공: {query} -> {ticker}")
+            return ticker
+    except Exception as e:
+        logger.warning(f"KRX 검색 실패: {e}")
+
+    # === 폴백: 하드코딩 딕셔너리 (오프라인/오류 시) ===
+    if query in KOREAN_STOCKS:
+        return KOREAN_STOCKS[query]
+
+    # 최종 폴백: 입력값 그대로 반환
+    logger.warning(f"종목을 찾을 수 없음: {query}")
     return query.upper()
 
 
