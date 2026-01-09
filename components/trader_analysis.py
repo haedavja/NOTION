@@ -650,8 +650,23 @@ def render_trader_discussion_ui(
             bears = [d for d in discussions if d['stance'] == 'bearish']
 
             if bulls and bears:
+                # 매수파 vs 매도파 토론
                 t1 = random.choice(bulls)['trader']
                 t2 = random.choice(bears)['trader']
+            else:
+                # 의견이 비슷해도 스타일이 다르면 토론 가능
+                # 가치 vs 성장, 기술적 vs 펀더멘털, 모멘텀 vs 역발상 등
+                debate_pairs = [
+                    ('value', 'growth'),      # 가치 vs 성장
+                    ('technical', 'value'),   # 차트 vs 펀더멘털
+                    ('momentum', 'contrarian'), # 모멘텀 vs 역발상
+                    ('quant', 'growth'),      # 퀀트 vs 성장
+                ]
+                pair = random.choice(debate_pairs)
+                t1 = get_trader_by_style(pair[0])
+                t2 = get_trader_by_style(pair[1])
+
+            if t1 and t2:
                 debate = generate_trader_debate(t1, t2, "stance", scores)
 
                 add_to_discussion(stock_code, {
@@ -661,8 +676,6 @@ def render_trader_discussion_ui(
                 })
                 disc_state['round'] += 1
                 st.rerun()
-            else:
-                st.info("의견이 비슷해서 토론이 어렵습니다")
 
     with col_btn3:
         if st.button("🔄 토론 초기화", key=f"reset_{stock_code}", use_container_width=True):
