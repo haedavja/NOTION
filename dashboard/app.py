@@ -125,6 +125,12 @@ try:
 except ImportError:
     pass
 
+try:
+    from dashboard.snowflake_page import render_snowflake_page
+    SNOWFLAKE_AVAILABLE = True
+except ImportError:
+    SNOWFLAKE_AVAILABLE = False
+
 # yfinance
 try:
     import yfinance as yf
@@ -380,25 +386,29 @@ def render_dashboard_page(data, prediction, scenario_summary):
 
     # 빠른 이동 버튼
     st.markdown("### 🔗 빠른 이동")
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
 
     with col1:
+        if st.button("❄️ Snowflake", use_container_width=True, key="quick_snowflake"):
+            st.session_state.current_page = 'snowflake'
+            st.rerun()
+    with col2:
         if st.button("🔥 급등/급락", use_container_width=True, key="quick_rally"):
             st.session_state.current_page = 'rally'
             st.rerun()
-    with col2:
+    with col3:
         if st.button("🇰🇷 한국 주식", use_container_width=True, key="quick_korea"):
             st.session_state.current_page = 'korea'
             st.rerun()
-    with col3:
+    with col4:
         if st.button("🤖 AI 분석", use_container_width=True, key="quick_ai"):
             st.session_state.current_page = 'ai_analysis'
             st.rerun()
-    with col4:
+    with col5:
         if st.button("🎯 잠재 요인", use_container_width=True, key="quick_potential"):
             st.session_state.current_page = 'potential'
             st.rerun()
-    with col5:
+    with col6:
         if st.button("📅 캘린더", use_container_width=True, key="quick_calendar"):
             st.session_state.current_page = 'calendar'
             st.rerun()
@@ -661,6 +671,7 @@ def main():
         'sentiment': True,
         'technical': True,
         'korea': KOREA_AVAILABLE,
+        'snowflake': SNOWFLAKE_AVAILABLE,
         'rally': RALLY_ANALYZER_AVAILABLE,
         'potential': POTENTIAL_ANALYZER_AVAILABLE,
         'portfolio': True,
@@ -751,6 +762,12 @@ def main():
             render_korea_page()
         else:
             render_unavailable_page("한국 주식", "필요한 패키지: `pykrx`")
+
+    elif current_page == 'snowflake':
+        if SNOWFLAKE_AVAILABLE:
+            render_snowflake_page()
+        else:
+            render_unavailable_page("Snowflake 분석", "필요한 패키지: `plotly`")
 
     elif current_page == 'rally':
         if RALLY_ANALYZER_AVAILABLE:

@@ -56,6 +56,7 @@ MENU_STRUCTURE: Dict[MenuCategory, Dict] = {
         "icon": "🔍",
         "items": [
             MenuItem("korea", "한국 주식", "🇰🇷", MenuCategory.STOCK, "KRX 종목 검색/분석"),
+            MenuItem("snowflake", "Snowflake 분석", "❄️", MenuCategory.STOCK, "5축 레이더 차트 분석"),
             MenuItem("rally", "급등/급락 분석", "🔥", MenuCategory.STOCK, "상승/하락 논리 분석"),
             MenuItem("potential", "잠재 요인", "🎯", MenuCategory.STOCK, "잠재적 급등락 요인"),
         ]
