@@ -8,14 +8,19 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import sys
 import os
+import io
 
 # 상위 디렉토리 import
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 캐싱 유틸리티
+from utils.cache import cached, get_memory_cache
+from config.constants import SNOWFLAKE, get_score_interpretation
 
 from data.macro_indicators import MacroIndicators
 from data.market_data import MarketData
@@ -541,7 +546,7 @@ def render_integrated_stock_analysis():
                 st.caption(f"종합 등급: **{grade}** | {description} | ❓ 샘플 데이터")
 
             # 탭으로 분석 영역 구분
-            tab1, tab2, tab3 = st.tabs(["❄️ Snowflake 분석", "💬 전문가 토론", "📝 투자논리 검증"])
+            tab1, tab2, tab3, tab4 = st.tabs(["❄️ Snowflake 분석", "💬 전문가 토론", "📝 투자논리 검증", "📊 종목 비교"])
 
             with tab1:
                 # Snowflake 차트
@@ -597,6 +602,73 @@ def render_integrated_stock_analysis():
                     else:
                         st.error("리스크 요인 다수 존재")
 
+                # 상세 해석 섹션
+                with st.expander("📖 상세 해석", expanded=True):
+                    interpretation_cols = st.columns(2)
+
+                    with interpretation_cols[0]:
+                        st.markdown("**💰 가치 평가**")
+                        st.caption(get_score_interpretation('value', scores.value))
+
+                        st.markdown("**🚀 미래 전망**")
+                        st.caption(get_score_interpretation('future', scores.future))
+
+                        st.markdown("**📈 과거 실적**")
+                        st.caption(get_score_interpretation('past', scores.past))
+
+                    with interpretation_cols[1]:
+                        st.markdown("**💵 배당 매력**")
+                        st.caption(get_score_interpretation('dividend', scores.dividend))
+
+                        st.markdown("**🏥 재무 건전성**")
+                        st.caption(get_score_interpretation('health', scores.health))
+
+                        # 강점/약점 요약
+                        st.markdown("**⚡ 강점/약점**")
+                        strengths = []
+                        weaknesses = []
+                        axes = [('value', '가치'), ('future', '미래'), ('past', '과거'),
+                                ('dividend', '배당'), ('health', '건전성')]
+                        for axis, name in axes:
+                            score = getattr(scores, axis)
+                            if score >= 4.0:
+                                strengths.append(name)
+                            elif score < 2.5:
+                                weaknesses.append(name)
+
+                        if strengths:
+                            st.caption(f"강점: {', '.join(strengths)}")
+                        if weaknesses:
+                            st.caption(f"약점: {', '.join(weaknesses)}")
+                        if not strengths and not weaknesses:
+                            st.caption("전반적으로 평균 수준")
+
+                # CSV 내보내기 버튼
+                export_data = {
+                    '종목코드': [selected_code],
+                    '종목명': [selected_name],
+                    '가치점수': [scores.value],
+                    '미래점수': [scores.future],
+                    '과거점수': [scores.past],
+                    '배당점수': [scores.dividend],
+                    '건전성점수': [scores.health],
+                    '종합점수': [scores.total],
+                    '등급': [grade],
+                    '데이터출처': [stock_data.get('data_source', 'unknown')],
+                    '분석일시': [datetime.now().strftime('%Y-%m-%d %H:%M')]
+                }
+                export_df = pd.DataFrame(export_data)
+                csv_buffer = io.StringIO()
+                export_df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+
+                st.download_button(
+                    label="📥 분석 결과 CSV 다운로드",
+                    data=csv_buffer.getvalue(),
+                    file_name=f"snowflake_{selected_code}_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
             with tab2:
                 # 트레이더 토론
                 try:
@@ -629,6 +701,196 @@ def render_integrated_stock_analysis():
                 except ImportError as e:
                     st.warning(f"투자논리 분석 모듈 로드 실패: {e}")
 
+            with tab4:
+                # 종목 비교 기능
+                st.markdown("### 📊 종목 비교 분석")
+                st.caption("현재 종목과 다른 종목들을 비교합니다")
+
+                # 비교 종목 추가
+                comparison_key = 'comparison_stocks'
+                if comparison_key not in st.session_state:
+                    st.session_state[comparison_key] = []
+
+                # 현재 종목을 비교 리스트에 추가
+                current_stock = {'code': selected_code, 'name': selected_name, 'scores': scores}
+                comparison_list = [current_stock]
+
+                # 비교 종목 입력
+                comp_cols = st.columns([3, 1])
+                with comp_cols[0]:
+                    comp_input = st.text_input(
+                        "비교 종목 추가 (코드 또는 종목명)",
+                        placeholder="예: 000660, SK하이닉스",
+                        key="comp_stock_input"
+                    )
+                with comp_cols[1]:
+                    add_comp = st.button("➕ 추가", key="add_comparison", use_container_width=True)
+
+                if add_comp and comp_input:
+                    # 종목 검색 및 추가
+                    try:
+                        from korea.krx_data import KRXDataCollector
+                        krx = KRXDataCollector()
+                        stock_list = krx.get_stock_list('ALL')
+                        if not stock_list.empty:
+                            mask = (stock_list['name'].str.contains(comp_input, case=False, na=False) |
+                                    stock_list['code'].str.contains(comp_input, na=False))
+                            matches = stock_list[mask]
+                            if not matches.empty:
+                                match = matches.iloc[0]
+                                if match['code'] not in [s['code'] for s in st.session_state[comparison_key]]:
+                                    comp_data = _get_stock_fundamentals_for_snowflake(match['code'])
+                                    if comp_data:
+                                        comp_scores = snowflake_analyzer.calculate_scores(fundamentals=comp_data, sector='default')
+                                        st.session_state[comparison_key].append({
+                                            'code': match['code'],
+                                            'name': match['name'],
+                                            'scores': comp_scores
+                                        })
+                                        st.rerun()
+                    except Exception as e:
+                        st.error(f"종목 추가 실패: {e}")
+
+                # 비교 목록 표시 및 삭제
+                if st.session_state[comparison_key]:
+                    st.markdown("**비교 종목 목록:**")
+                    for i, comp in enumerate(st.session_state[comparison_key]):
+                        col1, col2 = st.columns([4, 1])
+                        with col1:
+                            st.caption(f"{comp['name']} ({comp['code']})")
+                        with col2:
+                            if st.button("❌", key=f"remove_comp_{i}"):
+                                st.session_state[comparison_key].pop(i)
+                                st.rerun()
+
+                    comparison_list.extend(st.session_state[comparison_key])
+
+                # 비교 차트 생성
+                if len(comparison_list) >= 1:
+                    st.markdown("---")
+
+                    # 비교 테이블
+                    comp_data_list = []
+                    for stock in comparison_list:
+                        s = stock['scores']
+                        comp_data_list.append({
+                            '종목명': stock['name'],
+                            '가치': f"{s.value:.1f}",
+                            '미래': f"{s.future:.1f}",
+                            '과거': f"{s.past:.1f}",
+                            '배당': f"{s.dividend:.1f}",
+                            '건전성': f"{s.health:.1f}",
+                            '종합': f"{s.total:.1f}",
+                        })
+
+                    comp_df = pd.DataFrame(comp_data_list)
+                    st.dataframe(comp_df, use_container_width=True, hide_index=True)
+
+                    # 비교 레이더 차트
+                    if len(comparison_list) >= 2:
+                        fig = go.Figure()
+                        categories = ['가치', '미래', '과거', '배당', '건전성']
+
+                        colors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6']
+                        for i, stock in enumerate(comparison_list[:5]):  # 최대 5개
+                            s = stock['scores']
+                            values = [s.value, s.future, s.past, s.dividend, s.health]
+                            values.append(values[0])  # 닫힌 도형
+
+                            fig.add_trace(go.Scatterpolar(
+                                r=values,
+                                theta=categories + [categories[0]],
+                                fill='toself',
+                                fillcolor=f"rgba{tuple(list(int(colors[i].lstrip('#')[j:j+2], 16) for j in (0, 2, 4)) + [0.1])}",
+                                line=dict(color=colors[i], width=2),
+                                name=stock['name'][:10]
+                            ))
+
+                        fig.update_layout(
+                            polar=dict(
+                                radialaxis=dict(visible=True, range=[0, 6])
+                            ),
+                            showlegend=True,
+                            height=400,
+                            margin=dict(l=50, r=50, t=30, b=30)
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        # 비교 CSV 내보내기
+                        comp_export_data = []
+                        for stock in comparison_list:
+                            s = stock['scores']
+                            comp_export_data.append({
+                                '종목코드': stock['code'],
+                                '종목명': stock['name'],
+                                '가치점수': s.value,
+                                '미래점수': s.future,
+                                '과거점수': s.past,
+                                '배당점수': s.dividend,
+                                '건전성점수': s.health,
+                                '종합점수': s.total
+                            })
+                        comp_export_df = pd.DataFrame(comp_export_data)
+                        comp_csv_buffer = io.StringIO()
+                        comp_export_df.to_csv(comp_csv_buffer, index=False, encoding='utf-8-sig')
+
+                        st.download_button(
+                            label="📥 비교 결과 CSV 다운로드",
+                            data=comp_csv_buffer.getvalue(),
+                            file_name=f"comparison_{datetime.now().strftime('%Y%m%d')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+
+                # 포트폴리오 분석 섹션
+                st.markdown("---")
+                st.markdown("### 💼 포트폴리오 분석")
+                st.caption("여러 종목을 포트폴리오로 분석합니다")
+
+                if len(comparison_list) >= 2:
+                    # 포트폴리오 평균 점수
+                    avg_value = sum(s['scores'].value for s in comparison_list) / len(comparison_list)
+                    avg_future = sum(s['scores'].future for s in comparison_list) / len(comparison_list)
+                    avg_past = sum(s['scores'].past for s in comparison_list) / len(comparison_list)
+                    avg_dividend = sum(s['scores'].dividend for s in comparison_list) / len(comparison_list)
+                    avg_health = sum(s['scores'].health for s in comparison_list) / len(comparison_list)
+                    avg_total = sum(s['scores'].total for s in comparison_list) / len(comparison_list)
+
+                    port_cols = st.columns(6)
+                    metrics = [
+                        ('💰 가치', avg_value),
+                        ('🚀 미래', avg_future),
+                        ('📈 과거', avg_past),
+                        ('💵 배당', avg_dividend),
+                        ('🏥 건전성', avg_health),
+                        ('🎯 종합', avg_total)
+                    ]
+                    for i, (label, value) in enumerate(metrics):
+                        with port_cols[i]:
+                            delta_color = "normal" if value >= 3.5 else "inverse"
+                            st.metric(label, f"{value:.1f}", delta=None)
+
+                    # 포트폴리오 등급
+                    if avg_total >= 5.0:
+                        port_grade = "A+"
+                    elif avg_total >= 4.0:
+                        port_grade = "A"
+                    elif avg_total >= 3.5:
+                        port_grade = "B"
+                    elif avg_total >= 3.0:
+                        port_grade = "C"
+                    else:
+                        port_grade = "D"
+
+                    if avg_total >= 4.0:
+                        st.success(f"포트폴리오 등급: **{port_grade}** - 우량한 종목 구성입니다")
+                    elif avg_total >= 3.0:
+                        st.info(f"포트폴리오 등급: **{port_grade}** - 양호한 편이나 일부 종목 점검 필요")
+                    else:
+                        st.warning(f"포트폴리오 등급: **{port_grade}** - 종목 재검토를 권장합니다")
+                else:
+                    st.info("비교 종목을 추가하면 포트폴리오 분석이 가능합니다")
+
         else:
             st.warning(f"{selected_name} 분석 데이터를 불러올 수 없습니다.")
     else:
@@ -640,9 +902,10 @@ def render_snowflake_compact():
     render_integrated_stock_analysis()
 
 
+@cached(ttl=SNOWFLAKE.cache_ttl, cache_type="memory")
 def _get_stock_fundamentals_for_snowflake(code: str) -> Optional[Dict]:
     """
-    Snowflake 분석용 펀더멘털 데이터 조회 - 실제 데이터 기반
+    Snowflake 분석용 펀더멘털 데이터 조회 - 실제 데이터 기반 (캐시 적용)
 
     Returns:
         Dict with 'data_source' key: 'real' (실제 데이터) or 'estimated' (추정/폴백)

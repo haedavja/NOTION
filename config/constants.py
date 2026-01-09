@@ -296,3 +296,97 @@ def format_large_number(value: float) -> str:
         return f"{value/1e4:.1f}만"
     else:
         return f"{value:,.0f}"
+
+
+# ==================== Snowflake 분석 설정 ====================
+
+@dataclass
+class SnowflakeConfig:
+    """Snowflake 분석 설정"""
+    # 가중치 (합계 1.0)
+    weight_value: float = 0.25
+    weight_future: float = 0.20
+    weight_past: float = 0.20
+    weight_dividend: float = 0.10
+    weight_health: float = 0.25
+
+    # 등급 기준점
+    grade_a_plus: float = 5.0
+    grade_a: float = 4.0
+    grade_b: float = 3.5
+    grade_c: float = 3.0
+    grade_d: float = 2.5
+
+    # 캐시 TTL (초)
+    cache_ttl: int = 300  # 5분
+
+    # 섹터별 평균 PER
+    sector_per: Dict[str, float] = field(default_factory=lambda: {
+        '반도체': 20, '소프트웨어': 30, 'IT': 25,
+        '금융': 10, '은행': 8, '보험': 12,
+        '바이오': 50, '제약': 25, '헬스케어': 22,
+        '자동차': 10, '철강': 8, '화학': 12,
+        '유통': 15, '미디어': 18, '엔터': 25,
+        '건설': 10, '조선': 15, '기계': 12,
+        '식품': 15, '음료': 20, 'default': 15
+    })
+
+    @property
+    def weights(self) -> Dict[str, float]:
+        """가중치 딕셔너리"""
+        return {
+            'value': self.weight_value,
+            'future': self.weight_future,
+            'past': self.weight_past,
+            'dividend': self.weight_dividend,
+            'health': self.weight_health
+        }
+
+
+# Snowflake 설정 인스턴스
+SNOWFLAKE = SnowflakeConfig()
+
+
+# ==================== 점수 해석 텍스트 ====================
+
+SCORE_INTERPRETATIONS = {
+    'value': {
+        'high': "현재 주가가 내재가치 대비 저평가되어 있어 매력적인 진입 기회입니다. PER/PBR이 업종 평균보다 낮습니다.",
+        'medium': "주가가 적정 수준에서 거래되고 있습니다. 뚜렷한 저평가/고평가 신호는 없습니다.",
+        'low': "현재 주가가 고평가되어 있을 수 있습니다. 밸류에이션 부담이 있으니 진입 시 신중해야 합니다."
+    },
+    'future': {
+        'high': "성장 전망이 밝습니다. 매출/이익 성장률이 양호하고 시장에서 긍정적 기대를 받고 있습니다.",
+        'medium': "성장 전망은 보통 수준입니다. 안정적이지만 폭발적인 성장은 기대하기 어렵습니다.",
+        'low': "성장 전망이 불투명합니다. 매출/이익 감소 우려가 있거나 시장 기대가 낮습니다."
+    },
+    'past': {
+        'high': "과거 실적이 우수합니다. ROE, 영업이익률 등 수익성 지표가 양호하고 일관성 있습니다.",
+        'medium': "과거 실적은 평균적입니다. 수익성이 안정적이지만 뛰어나지는 않습니다.",
+        'low': "과거 실적이 부진합니다. 수익성 개선이 필요하며 적자 이력이 있을 수 있습니다."
+    },
+    'dividend': {
+        'high': "배당 매력이 높습니다. 배당수익률이 양호하고 배당 지급 이력이 안정적입니다.",
+        'medium': "배당 수준은 보통입니다. 적정한 배당을 지급하거나 성장에 재투자하고 있습니다.",
+        'low': "배당 매력이 낮습니다. 무배당이거나 배당수익률이 매우 낮습니다."
+    },
+    'health': {
+        'high': "재무 건전성이 우수합니다. 부채비율이 낮고 유동성이 충분하여 재무 리스크가 낮습니다.",
+        'medium': "재무 상태는 보통입니다. 적정 수준의 부채를 유지하고 있습니다.",
+        'low': "재무 건전성에 주의가 필요합니다. 부채비율이 높거나 유동성이 부족할 수 있습니다."
+    }
+}
+
+
+def get_score_interpretation(axis: str, score: float) -> str:
+    """점수에 따른 상세 해석 반환"""
+    if axis not in SCORE_INTERPRETATIONS:
+        return ""
+
+    interpretations = SCORE_INTERPRETATIONS[axis]
+    if score >= 4.0:
+        return interpretations['high']
+    elif score >= 2.5:
+        return interpretations['medium']
+    else:
+        return interpretations['low']
