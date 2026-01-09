@@ -486,35 +486,40 @@ def render_snowflake_compact():
     selected_name = st.session_state.get('snowflake_selected_name')
 
     # 검색 결과 표시
-    if search_input and KOREA_AVAILABLE:
-        try:
-            krx = KRXDataCollector()
-            stock_list = krx.get_stock_list('ALL')
-            if not stock_list.empty:
-                # 이름 또는 코드로 검색
-                mask = (stock_list['name'].str.contains(search_input, case=False, na=False) |
-                        stock_list['code'].str.contains(search_input, na=False))
-                matches = stock_list[mask].head(10)
+    if search_input:
+        if not KOREA_AVAILABLE:
+            st.warning(f"⚠️ '{search_input}' - 한국 주식 모듈이 비활성화되어 검색할 수 없습니다.")
+        else:
+            try:
+                krx = KRXDataCollector()
+                stock_list = krx.get_stock_list('ALL')
+                if not stock_list.empty:
+                    # 이름 또는 코드로 검색
+                    mask = (stock_list['name'].str.contains(search_input, case=False, na=False) |
+                            stock_list['code'].str.contains(search_input, na=False))
+                    matches = stock_list[mask].head(10)
 
-                if not matches.empty:
-                    st.caption(f"🔎 검색 결과 ({len(matches)}개)")
-                    # 검색 결과를 버튼으로 표시
-                    result_cols = st.columns(min(5, len(matches)))
-                    for i, (_, row) in enumerate(matches.head(5).iterrows()):
-                        with result_cols[i]:
-                            if st.button(
-                                f"{row['name'][:6]}",
-                                key=f"search_result_{row['code']}",
-                                use_container_width=True,
-                                help=f"{row['name']} ({row['code']})"
-                            ):
-                                st.session_state.snowflake_selected_code = row['code']
-                                st.session_state.snowflake_selected_name = row['name']
-                                st.rerun()
+                    if not matches.empty:
+                        st.caption(f"🔎 검색 결과 ({len(matches)}개)")
+                        # 검색 결과를 버튼으로 표시
+                        result_cols = st.columns(min(5, len(matches)))
+                        for i, (_, row) in enumerate(matches.head(5).iterrows()):
+                            with result_cols[i]:
+                                if st.button(
+                                    f"{row['name'][:6]}",
+                                    key=f"search_result_{row['code']}",
+                                    use_container_width=True,
+                                    help=f"{row['name']} ({row['code']})"
+                                ):
+                                    st.session_state.snowflake_selected_code = row['code']
+                                    st.session_state.snowflake_selected_name = row['name']
+                                    st.rerun()
+                    else:
+                        st.error(f"❌ '{search_input}' 종목을 찾을 수 없습니다. 정확한 종목명이나 코드를 입력하세요.")
                 else:
-                    st.caption("검색 결과가 없습니다.")
-        except Exception as e:
-            st.caption(f"검색 오류: {e}")
+                    st.error(f"❌ '{search_input}' - 종목 데이터를 불러올 수 없습니다.")
+            except Exception as e:
+                st.error(f"❌ 검색 오류: {e}")
 
     # 인기 종목 퀵 버튼
     popular_stocks = [
