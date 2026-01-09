@@ -66,9 +66,11 @@ except ImportError:
 
 try:
     from dashboard.korea_page import render_korea_page
+    from korea.krx_data import KRXDataCollector
+    from korea.bok_indicators import BOKIndicators
     KOREA_AVAILABLE = True
 except ImportError:
-    pass
+    KOREA_AVAILABLE = False
 
 try:
     from dashboard.advanced_features import render_advanced_features
@@ -393,54 +395,127 @@ def create_time_series_chart(data: pd.DataFrame, columns: list, title: str):
 
 # ==================== 페이지 렌더링 함수 ====================
 def render_dashboard_page(data, prediction, scenario_summary):
-    """대시보드 (홈) 페이지"""
-    st.markdown("## 📊 대시보드")
+    """대시보드 (홈) 페이지 - 한국 시장 중심"""
+    st.markdown("## 📊 한국 주식 대시보드")
 
     # 온보딩 가이드
     render_onboarding()
 
-    # 핵심 지표 요약
-    col1, col2, col3, col4 = st.columns(4)
+    # ==================== 한국 시장 현황 ====================
+    if KOREA_AVAILABLE:
+        try:
+            krx = KRXDataCollector()
+            bok = BOKIndicators()
 
-    with col1:
-        prob = prediction.probability * 100
-        delta_color = "normal" if prob > 50 else "inverse"
-        st.metric("상승 확률", f"{prob:.1f}%",
-                  delta=f"{prob - 50:.1f}%p", delta_color=delta_color)
+            # 시장 요약 데이터
+            market_summary = krx.get_market_summary()
+            exchange_rates = bok.get_exchange_rates()
 
-    with col2:
-        st.metric("신뢰도", f"{prediction.confidence*100:.0f}%",
-                  delta="높음" if prediction.confidence > 0.7 else "보통")
+            # 핵심 지표 (한국 시장)
+            col1, col2, col3, col4 = st.columns(4)
 
-    with col3:
-        most_likely = scenario_summary.get('most_likely_scenario', {})
-        st.metric("주요 시나리오", most_likely.get('name', 'N/A'),
-                  delta=f"{most_likely.get('probability', 0):.0f}%")
+            with col1:
+                kospi = market_summary.get('KOSPI', {})
+                kospi_close = kospi.get('close', 0)
+                kospi_change = kospi.get('change_pct', 0)
+                st.metric(
+                    "🇰🇷 KOSPI",
+                    f"{kospi_close:,.2f}",
+                    delta=f"{kospi_change:+.2f}%",
+                    delta_color="normal" if kospi_change >= 0 else "inverse"
+                )
 
-    with col4:
-        if 'vix' in data['market'].columns:
-            vix = data['market']['vix'].iloc[-1]
-            st.metric("VIX", f"{vix:.1f}")
-        else:
-            st.metric("VIX", "N/A")
+            with col2:
+                kosdaq = market_summary.get('KOSDAQ', {})
+                kosdaq_close = kosdaq.get('close', 0)
+                kosdaq_change = kosdaq.get('change_pct', 0)
+                st.metric(
+                    "🇰🇷 KOSDAQ",
+                    f"{kosdaq_close:,.2f}",
+                    delta=f"{kosdaq_change:+.2f}%",
+                    delta_color="normal" if kosdaq_change >= 0 else "inverse"
+                )
 
-    st.divider()
+            with col3:
+                usd_krw = exchange_rates.get('usd_krw', 0)
+                st.metric("💱 USD/KRW", f"₩{usd_krw:,.0f}")
+
+            with col4:
+                if 'vix' in data['market'].columns:
+                    vix = data['market']['vix'].iloc[-1]
+                    st.metric("📊 VIX (공포지수)", f"{vix:.1f}")
+                else:
+                    st.metric("📊 VIX", "N/A")
+
+            st.divider()
+
+            # KOSPI/KOSDAQ 차트
+            st.subheader("📈 KOSPI / KOSDAQ 추이")
+
+            col_chart1, col_chart2 = st.columns(2)
+
+            with col_chart1:
+                kospi_data = krx.get_index_data('KOSPI', days=30)
+                if not kospi_data.empty:
+                    fig_kospi = go.Figure()
+                    fig_kospi.add_trace(go.Candlestick(
+                        x=kospi_data.index,
+                        open=kospi_data['Open'],
+                        high=kospi_data['High'],
+                        low=kospi_data['Low'],
+                        close=kospi_data['Close'],
+                        name='KOSPI'
+                    ))
+                    fig_kospi.update_layout(
+                        title="KOSPI (30일)",
+                        height=300,
+                        margin=dict(l=10, r=10, t=40, b=10),
+                        xaxis_rangeslider_visible=False
+                    )
+                    st.plotly_chart(fig_kospi, use_container_width=True)
+
+            with col_chart2:
+                kosdaq_data = krx.get_index_data('KOSDAQ', days=30)
+                if not kosdaq_data.empty:
+                    fig_kosdaq = go.Figure()
+                    fig_kosdaq.add_trace(go.Candlestick(
+                        x=kosdaq_data.index,
+                        open=kosdaq_data['Open'],
+                        high=kosdaq_data['High'],
+                        low=kosdaq_data['Low'],
+                        close=kosdaq_data['Close'],
+                        name='KOSDAQ',
+                        increasing_line_color='red',
+                        decreasing_line_color='blue'
+                    ))
+                    fig_kosdaq.update_layout(
+                        title="KOSDAQ (30일)",
+                        height=300,
+                        margin=dict(l=10, r=10, t=40, b=10),
+                        xaxis_rangeslider_visible=False
+                    )
+                    st.plotly_chart(fig_kosdaq, use_container_width=True)
+
+            st.divider()
+
+        except Exception as e:
+            st.warning(f"한국 시장 데이터 로드 중 오류: {e}")
 
     # 빠른 이동 버튼
     st.markdown("### 🔗 빠른 이동")
     col1, col2, col3, col4, col5, col6 = st.columns(6)
 
     with col1:
+        if st.button("🇰🇷 한국 주식", use_container_width=True, key="quick_korea"):
+            st.session_state.current_page = 'korea'
+            st.rerun()
+    with col2:
         if st.button("❄️ Snowflake", use_container_width=True, key="quick_snowflake"):
             st.session_state.current_page = 'snowflake'
             st.rerun()
-    with col2:
+    with col3:
         if st.button("🔥 급등/급락", use_container_width=True, key="quick_rally"):
             st.session_state.current_page = 'rally'
-            st.rerun()
-    with col3:
-        if st.button("🇰🇷 한국 주식", use_container_width=True, key="quick_korea"):
-            st.session_state.current_page = 'korea'
             st.rerun()
     with col4:
         if st.button("🤖 AI 분석", use_container_width=True, key="quick_ai"):
@@ -457,28 +532,27 @@ def render_dashboard_page(data, prediction, scenario_summary):
 
     st.divider()
 
-    # 시장 현황 요약
-    col1, col2 = st.columns(2)
+    # 글로벌 시장 (참고용)
+    with st.expander("🌍 글로벌 시장 현황", expanded=False):
+        col1, col2 = st.columns(2)
 
-    with col1:
-        st.subheader("📈 시장 지수")
-        if 'sp500' in data['market'].columns:
-            market_df = pd.DataFrame({
-                '지수': ['S&P 500', 'NASDAQ', 'DOW'],
-                '현재가': [
-                    f"{data['market']['sp500'].iloc[-1]:,.0f}" if 'sp500' in data['market'].columns else 'N/A',
-                    f"{data['market']['nasdaq'].iloc[-1]:,.0f}" if 'nasdaq' in data['market'].columns else 'N/A',
-                    f"{data['market']['dow'].iloc[-1]:,.0f}" if 'dow' in data['market'].columns else 'N/A',
-                ]
-            })
-            st.dataframe(market_df, use_container_width=True, hide_index=True)
+        with col1:
+            st.markdown("**미국 지수**")
+            if 'sp500' in data['market'].columns:
+                market_df = pd.DataFrame({
+                    '지수': ['S&P 500', 'NASDAQ', 'DOW'],
+                    '현재가': [
+                        f"{data['market']['sp500'].iloc[-1]:,.0f}" if 'sp500' in data['market'].columns else 'N/A',
+                        f"{data['market']['nasdaq'].iloc[-1]:,.0f}" if 'nasdaq' in data['market'].columns else 'N/A',
+                        f"{data['market']['dow'].iloc[-1]:,.0f}" if 'dow' in data['market'].columns else 'N/A',
+                    ]
+                })
+                st.dataframe(market_df, use_container_width=True, hide_index=True)
 
-    with col2:
-        st.subheader("🎯 권장 자산 배분")
-        allocation = scenario_summary.get('recommended_allocation', {})
-        if allocation:
-            alloc_chart = create_allocation_chart(allocation)
-            st.plotly_chart(alloc_chart, use_container_width=True)
+        with col2:
+            st.markdown("**시장 예측**")
+            prob = prediction.probability * 100
+            st.metric("상승 확률", f"{prob:.1f}%", delta=f"{prob - 50:.1f}%p")
 
 
 def render_prediction_page(data, prediction, scenario_summary):
