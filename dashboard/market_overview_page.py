@@ -74,21 +74,25 @@ def fetch_market_index_data(days: int = 120) -> Dict[str, pd.DataFrame]:
     """시장 지수 데이터 조회"""
     indices = {}
 
-    if not KRX_AVAILABLE:
-        # 샘플 데이터 생성
+    def _generate_sample_data():
+        """샘플 데이터 생성"""
+        sample_indices = {}
         dates = pd.date_range(end=datetime.now(), periods=days, freq='B')
 
-        for name, base in [('KOSPI', 2500), ('KOSDAQ', 850)]:
+        for name, base in [('KOSPI', 2400), ('KOSDAQ', 680)]:
             np.random.seed(hash(name) % 10000)
             returns = np.random.randn(days) * 0.01
             prices = base * np.exp(np.cumsum(returns))
-            indices[name] = pd.DataFrame({
+            sample_indices[name] = pd.DataFrame({
                 'Date': dates,
                 'Close': prices,
                 'Volume': np.random.randint(1000000, 5000000, days)
             }).set_index('Date')
 
-        return indices
+        return sample_indices
+
+    if not KRX_AVAILABLE:
+        return _generate_sample_data()
 
     try:
         collector = KRXDataCollector()
@@ -106,8 +110,12 @@ def fetch_market_index_data(days: int = 120) -> Dict[str, pd.DataFrame]:
             indices['KOSDAQ'] = kosdaq.tail(days)
 
     except Exception as e:
-        # NOTE: KRX 데이터 조회 실패 시 샘플 데이터 사용됨
         logger.warning(f"KRX 지수 데이터 조회 실패: {e}")
+
+    # KRX 데이터가 비어있으면 샘플 데이터 사용
+    if not indices or 'KOSPI' not in indices:
+        logger.info("샘플 데이터로 대체합니다.")
+        return _generate_sample_data()
 
     return indices
 
