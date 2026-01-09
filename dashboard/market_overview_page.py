@@ -75,14 +75,18 @@ def fetch_market_index_data(days: int = 120) -> Dict[str, pd.DataFrame]:
     indices = {}
 
     def _generate_sample_data():
-        """샘플 데이터 생성"""
+        """샘플 데이터 생성 (2026년 1월 기준)"""
         sample_indices = {}
         dates = pd.date_range(end=datetime.now(), periods=days, freq='B')
 
-        for name, base in [('KOSPI', 2400), ('KOSDAQ', 680)]:
+        # 2026년 1월 기준 - 실제 현재 지수에 가깝게
+        for name, base in [('KOSPI', 2520), ('KOSDAQ', 720)]:
             np.random.seed(hash(name) % 10000)
-            returns = np.random.randn(days) * 0.01
-            prices = base * np.exp(np.cumsum(returns))
+            returns = np.random.randn(days) * 0.008  # 변동성 낮춤
+            # 마지막 값이 base가 되도록 조정
+            cumret = np.cumsum(returns)
+            adjustment = cumret[-1]
+            prices = base * np.exp(cumret - adjustment)
             sample_indices[name] = pd.DataFrame({
                 'Date': dates,
                 'Close': prices,
