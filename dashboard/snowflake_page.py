@@ -315,6 +315,11 @@ def render_recommendations():
         key="sector_select"
     )
 
+    # 선택한 스타일 설명
+    style_desc = get_investment_style_description(style)
+    if style_desc:
+        st.info(f"💡 {style_desc}")
+
     st.divider()
 
     if st.button("🔮 추천받기", type="primary", use_container_width=True):

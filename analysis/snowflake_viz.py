@@ -101,10 +101,10 @@ class SnowflakeAnalyzer:
                 score += 1.0  # 저평가
             elif per_ratio < 1.0:
                 score += 0.5  # 약간 저평가
-            elif per_ratio > 1.5:
-                score -= 1.0  # 고평가
             elif per_ratio > 2.0:
                 score -= 1.5  # 크게 고평가
+            elif per_ratio > 1.5:
+                score -= 1.0  # 고평가
 
         # PBR 평가
         pbr = data.get('pbr') or data.get('PBR')
@@ -258,10 +258,10 @@ class SnowflakeAnalyzer:
             score += 1.0
         elif debt_ratio < 150:
             score += 0.5
-        elif debt_ratio > 200:
-            score -= 1.0
         elif debt_ratio > 300:
-            score -= 1.5
+            score -= 1.5  # 매우 높은 부채
+        elif debt_ratio > 200:
+            score -= 1.0  # 높은 부채
 
         # 유동비율
         current_ratio = data.get('current_ratio') or data.get('유동비율', 1)
