@@ -1,6 +1,40 @@
 """
 데이터 영속성 모듈
 포트폴리오, 보고서, 설정을 JSON 파일로 저장/로드
+
+=== 인수인계 메모 ===
+
+[스레드 안전성]
+- 모든 메서드는 RLock으로 보호됨
+- RLock 사용 이유: 재귀적 호출 허용 (같은 스레드에서 중첩 락 가능)
+- 파일 I/O가 있는 모든 작업은 락 내부에서 수행
+
+[저장 위치]
+기본 경로: ~/.notion_portfolio/
+├── portfolio.json    # 포트폴리오 데이터
+├── reports.json      # 보고서 히스토리
+├── settings.json     # 사용자 설정
+└── alerts.json       # 알림 히스토리
+
+[보안: 경로 검증]
+export_all(), import_all()에 경로 검증 적용:
+- '..' 포함 여부 (경로 탐색 공격)
+- 허용 확장자: .json, .csv, .xlsx만 허용
+- 로그에 경로 탐색 시도 기록
+
+[전역 인스턴스]
+data_store = DataStore()  # 모듈 임포트 시 자동 생성
+직접 생성하지 말고 이 인스턴스 사용 권장
+
+[확장 시 주의]
+- 새 저장 메서드 추가 시 반드시 with self._lock: 사용
+- 새 파일 추가 시 __init__에 경로 추가
+- clear_all() 수정 시 새 파일도 포함
+
+[데이터 형식]
+- 모든 데이터는 JSON으로 저장
+- datetime은 ISO 형식 문자열로 변환
+- Enum은 .value로 변환
 """
 
 import json

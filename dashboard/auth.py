@@ -1,6 +1,31 @@
 """
 사용자 인증 모듈
 streamlit-authenticator 기반 또는 간단한 비밀번호 인증
+
+=== 인수인계 메모 ===
+
+[패스워드 해싱]
+- bcrypt 사용 (rounds=12): 가장 안전, `pip install bcrypt` 필요
+- PBKDF2 폴백 (iterations=100000): bcrypt 없을 때 자동 사용
+- 레거시 SHA256: 기존 해시 지원, 로그인 시 자동 업그레이드
+
+[해시 형식 구분]
+- bcrypt: '$2b$12$...' 또는 '$2a$12$...'
+- PBKDF2: 'pbkdf2:salt:key' (salt=32자, key=64자 hex)
+- 레거시 SHA256: 64자 hex
+
+[보안 포인트]
+- hmac.compare_digest(): 타이밍 공격 방지 (상수 시간 비교)
+- secrets.token_urlsafe(): 암호학적으로 안전한 랜덤
+- 초기 비밀번호 파일 권한: 0o600 (소유자만 읽기)
+
+[데이터 저장 위치]
+- ~/.notion_portfolio/auth.json: 사용자 정보
+- ~/.notion_portfolio/initial_password.txt: 초기 비밀번호 (삭제 권장)
+
+[확장 시 주의]
+- 새 해시 알고리즘 추가 시 _verify_password()에 분기 추가
+- 비밀번호 정책 변경 시 change_password()에 검증 추가
 """
 
 import streamlit as st

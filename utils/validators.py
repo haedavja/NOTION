@@ -1,6 +1,60 @@
 """
 입력 유효성 검사 모듈
 폼 입력, API 요청, 데이터 검증
+
+=== 인수인계 메모 ===
+
+[모듈 구조]
+1. ValidationResult: 검증 결과 데이터 클래스
+2. Validator: 기본 검증기 (정적 메서드)
+3. FormValidator: 폼 전체 검증
+4. Sanitizer: 보안 새니타이저 (신규)
+5. PathValidator: 파일 경로 검증 (신규)
+
+[Validator 메서드]
+- required(): 필수값 검사
+- string(): 문자열 길이/패턴 검사
+- number(): 숫자 범위 검사
+- email(): 이메일 형식 검사
+- stock_symbol(): 주식 코드 검사 (미국/한국)
+- date(): 날짜 형식/범위 검사
+- url(): URL 형식 검사
+- currency(): 금액 검사
+
+[Sanitizer 메서드 (보안)]
+- html_escape(): XSS 방지 (< > & " ' / 이스케이프)
+- strip_html_tags(): HTML 태그 제거
+- sanitize_filename(): 안전한 파일명 (.. / \\ 제거)
+- sanitize_path(): 경로 탐색 공격 방지
+- sanitize_sql_identifier(): SQL 인젝션 방지
+
+[PathValidator 메서드]
+- validate_file_path(): 파일 경로 검증
+  - 경로 탐색 공격 방지 ('..' 차단)
+  - Null 바이트 인젝션 방지 ('\\x00' 차단)
+  - 확장자 화이트리스트 검사
+- validate_directory(): 디렉토리 검증
+
+[사용 예시]
+```python
+from utils.validators import Validator, Sanitizer, PathValidator
+
+# 입력 검증
+result = Validator.string(user_input, min_length=1, max_length=100)
+if not result.is_valid:
+    return result.error_message
+
+# HTML 새니타이저 (XSS 방지)
+safe_text = Sanitizer.html_escape(user_input)
+
+# 경로 검증
+result = PathValidator.validate_file_path(path, allowed_extensions={'.json'})
+```
+
+[확장 시 주의]
+- 새 Validator 메서드는 ValidationResult 반환
+- Sanitizer 메서드는 새니타이즈된 값 반환 (None 가능)
+- 에러 메시지는 한국어로 작성
 """
 
 import re

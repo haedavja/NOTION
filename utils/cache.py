@@ -1,6 +1,42 @@
 """
 캐싱 유틸리티
 데이터 캐싱 및 성능 최적화
+
+=== 인수인계 메모 ===
+
+[두 가지 캐시 타입]
+1. MemoryCache: 인메모리 LRU 캐시 (빠름, 프로세스 종료 시 삭제)
+2. FileCache: 파일 기반 캐시 (느림, 영구 저장)
+
+[스레드 안전성]
+- 모든 캐시 메서드는 Lock으로 보호됨
+- MemoryCache: threading.Lock
+- FileCache: threading.Lock (파일 I/O 동기화)
+
+[직렬화 변경사항 (보안)]
+- Before: pickle (RCE 취약점) → After: JSON
+- 파일 확장자: .cache → .cache.json
+- 레거시 .cache 파일은 접근 시 자동 삭제됨
+
+[해시 변경사항]
+- Before: MD5 (충돌 취약) → After: SHA256[:32]
+- 캐시 키 생성에 SHA256 사용
+
+[전역 인스턴스]
+- _memory_cache: get_memory_cache()로 접근
+- _file_cache: get_file_cache()로 접근
+- clear_all_caches(): 양쪽 캐시 정리
+
+[데코레이터 사용법]
+@cached(ttl=300, cache_type="memory")  # 5분 메모리 캐시
+@cached(ttl=3600, cache_type="file")   # 1시간 파일 캐시
+def expensive_function():
+    pass
+
+[주의사항]
+- JSON 직렬화 가능한 데이터만 캐시 가능
+- datetime, Decimal 등은 default=str로 문자열 변환됨
+- 캐시 키는 함수명+인자로 자동 생성
 """
 
 import time
