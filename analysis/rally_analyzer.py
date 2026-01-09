@@ -700,11 +700,14 @@ class CredibilityScorer:
         """기술적 점수 계산"""
         score = 50
 
-        # 상승 추세 확인
-        if rally_info.change_1m > rally_info.change_5d > rally_info.change_1d > 0:
-            score += 20  # 건전한 상승 추세
+        # 상승 추세 확인 (모든 기간이 양수이면 건전한 상승)
+        if rally_info.change_1d > 0 and rally_info.change_5d > 0 and rally_info.change_1m > 0:
+            score += 15  # 전체적으로 상승 추세
+            # 급등 경고 (일일 상승률이 너무 높으면 과열)
+            if rally_info.change_1d > 10:
+                score -= 10  # 급등 (과열 우려)
         elif rally_info.change_1d > 10:
-            score -= 10  # 급등 (과열 우려)
+            score -= 10  # 단기 급등 (과열 우려)
 
         # 거래량 동반
         if rally_info.volume_ratio > 1.5:

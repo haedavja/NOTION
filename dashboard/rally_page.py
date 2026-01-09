@@ -70,6 +70,10 @@ def render_rally_section():
 
 def render_top_rallies():
     """급등 종목 탭"""
+    # session_state 초기화
+    if 'run_rally_analysis' not in st.session_state:
+        st.session_state.run_rally_analysis = False
+
     st.subheader("🔥 최근 급등 종목 분석")
 
     col1, col2 = st.columns([2, 1])
@@ -83,7 +87,7 @@ def render_top_rallies():
         if st.button("🔄 분석 시작", key="start_rally_analysis", type="primary"):
             st.session_state.run_rally_analysis = True
 
-    if st.session_state.get('run_rally_analysis'):
+    if st.session_state.run_rally_analysis:
         with st.spinner("급등 종목 분석 중..."):
             try:
                 detector = RallyDetector()

@@ -179,7 +179,7 @@ class KRXDataCollector:
         """
         # 메모리 캐시 확인
         if not force_refresh and self._stock_cache is not None:
-            if self._cache_time and (datetime.now() - self._cache_time).seconds < 3600:
+            if self._cache_time and (datetime.now() - self._cache_time).total_seconds() < 3600:
                 df = pd.DataFrame(self._stock_cache)
                 if market != 'ALL':
                     df = df[df['market'] == market]

@@ -347,7 +347,7 @@ class PotentialCatalystDetector:
                 probability=Probability.MODERATE,
                 timeframe=Timeframe.MEDIUM_TERM,
                 evidence=[f"PER {per:.1f}배로 밸류에이션 부담"],
-                expected_move_pct=(-20, -40)
+                expected_move_pct=(-40, -20)
             ))
 
         # 부채 리스크 탐지
