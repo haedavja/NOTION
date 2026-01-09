@@ -1,12 +1,49 @@
 """
 종합 스코어카드 모듈
-여러 분석 결과를 통합하여 하나의 종합 점수로 제공
+====================
+
+여러 분석 결과를 통합하여 하나의 종합 점수로 제공합니다.
+
+주요 클래스:
+----------
+- ScoreCategory: 점수 카테고리 열거형
+- CategoryScore: 카테고리별 점수 데이터
+- ComprehensiveScorecard: 종합 스코어카드 데이터
+- ScorecardGenerator: 스코어카드 생성기
+
+가중치 구성 (기본값):
+------------------
+- 펀더멘털(Snowflake): 30%
+- 기술적 분석: 20%
+- 수급 분석: 20%
+- 잠재 요인: 15%
+- 상승 신뢰도: 15%
+
+사용 예시:
+---------
+    generator = ScorecardGenerator()
+    scorecard = generator.generate(
+        symbol='005930',
+        name='삼성전자',
+        snowflake_scores=snowflake,
+        technical_data=tech_data,
+        supply_demand_data=supply_data
+    )
+
+유지보수 노트:
+------------
+- 가중치 수정: ScorecardGenerator.__init__의 self.weights
+- 등급 기준 수정: _get_grade() 메서드
+- 추천 로직 수정: _get_recommendation() 메서드
 """
 
 import streamlit as st
 from dataclasses import dataclass, field
 from typing import Dict, Optional, List
 from enum import Enum
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ScoreCategory(Enum):

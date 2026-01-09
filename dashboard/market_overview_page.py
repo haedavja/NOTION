@@ -1,6 +1,30 @@
 """
 시장 종합 현황 대시보드
-시장 논리/근거, 차트, 주도주, 리스크, 잠재적 고점 분석
+========================
+
+시장 논리/근거, 차트, 주도주, 리스크, 잠재적 고점 분석을 제공합니다.
+
+주요 기능:
+---------
+1. 시장 현황 탭: 지수 분석, SNS 스타일 토론, 핵심 지표
+2. 주도 섹터/종목 탭: 상승/하락 상위, 섹터별 동향
+3. 리스크 분석 탭: 리스크 게이지, 요인 분석
+4. 목표/지지선 탭: 저항선, 지지선, 52주 범위
+
+의존성:
+------
+- pykrx: 한국 주식 데이터 (선택적)
+- plotly: 차트 시각화 (선택적)
+- analysis.sector_rotation: 섹터 분석 (선택적)
+
+유지보수 노트:
+------------
+- TRADER_PERSONAS: 6개 트레이더 페르소나 정의 (line ~310)
+- generate_sns_market_discussion(): SNS 토론 생성 로직 (line ~357)
+- render_sns_discussion(): 토론 UI 렌더링 (line ~656)
+- 새 페르소나 추가 시 TRADER_PERSONAS와 generate_sns_market_discussion() 모두 수정 필요
+
+버전: 2.0 (2024-01)
 """
 
 import streamlit as st
@@ -10,6 +34,10 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import sys
 import os
+import logging
+
+# 로깅 설정
+logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -78,13 +106,26 @@ def fetch_market_index_data(days: int = 120) -> Dict[str, pd.DataFrame]:
             indices['KOSDAQ'] = kosdaq.tail(days)
 
     except Exception as e:
-        pass
+        # NOTE: KRX 데이터 조회 실패 시 샘플 데이터 사용됨
+        logger.warning(f"KRX 지수 데이터 조회 실패: {e}")
 
     return indices
 
 
 def fetch_top_movers(limit: int = 10) -> Tuple[List[Dict], List[Dict]]:
-    """상승/하락 상위 종목"""
+    """
+    상승/하락 상위 종목 조회
+
+    Args:
+        limit: 반환할 최대 종목 수 (각 상승/하락)
+
+    Returns:
+        Tuple[List[Dict], List[Dict]]: (상승 종목 리스트, 하락 종목 리스트)
+        각 종목: {'name': 종목명, 'code': 종목코드, 'change': 등락률}
+
+    Note:
+        KRX 미설치 시 샘플 데이터 반환
+    """
     gainers = []
     losers = []
 
@@ -133,14 +174,36 @@ def fetch_top_movers(limit: int = 10) -> Tuple[List[Dict], List[Dict]]:
                     'change': row.get('등락률', 0)
                 })
 
-    except Exception:
-        pass
+    except Exception as e:
+        # NOTE: 상승/하락 종목 조회 실패 시 빈 리스트 반환
+        logger.warning(f"상승/하락 종목 조회 실패: {e}")
 
     return gainers, losers
 
 
 def calculate_market_metrics(index_data: pd.DataFrame) -> Dict:
-    """시장 지표 계산"""
+    """
+    시장 지표 계산
+
+    지수 데이터로부터 다양한 기술적/성과 지표를 계산합니다.
+
+    Args:
+        index_data: 지수 데이터 DataFrame (Close 컬럼 필수)
+
+    Returns:
+        Dict: 계산된 지표들
+            - current: 현재가
+            - return_1d/1w/1m/3m: 기간별 수익률 (%)
+            - ma20/60/120: 이동평균선
+            - rsi: RSI (14일)
+            - volatility: 연환산 변동성 (%)
+            - high_52w/low_52w: 52주 고저
+            - from_high/from_low: 고저 대비 (%)
+            - above_ma20/60/120: 이평선 위 여부
+
+    Note:
+        데이터가 20개 미만이면 빈 딕셔너리 반환
+    """
     if index_data.empty or len(index_data) < 20:
         return {}
 
@@ -306,9 +369,25 @@ def generate_market_narrative(metrics: Dict, condition: Dict, phase: str = None)
 
 
 # ============ SNS 스타일 시장 토론 ============
+#
+# [유지보수 가이드]
+# 1. 새 페르소나 추가:
+#    - TRADER_PERSONAS에 새 항목 추가
+#    - generate_sns_market_discussion()에 해당 로직 추가
+#    - style은 의견 생성 시 참조됨
+#
+# 2. 색상 규칙:
+#    - 강세: #22c55e (초록)
+#    - 약세: #ef4444 (빨강)
+#    - 기술적: #3b82f6 (파랑)
+#    - 거시경제: #8b5cf6 (보라)
+#    - 개인투자자: #f59e0b (주황)
+#    - 퀀트: #06b6d4 (시안)
+#
+# 3. avatar는 이모지 하나만 사용
 
 # 트레이더 페르소나 정의
-TRADER_PERSONAS = {
+TRADER_PERSONAS: Dict[str, Dict[str, str]] = {
     'bull_master': {
         'name': '강세론자 김프로',
         'avatar': '🐂',
@@ -363,9 +442,43 @@ def generate_sns_market_discussion(
 ) -> List[Dict]:
     """
     SNS 스타일 시장 토론 생성
-    여러 페르소나가 대화하듯 시장을 분석
+
+    6개의 트레이더 페르소나가 현재 시장 상황에 대해 각자의 관점에서 의견을 제시합니다.
+
+    Args:
+        metrics: 시장 지표 딕셔너리
+            - return_1m: 1개월 수익률 (%)
+            - return_1w: 1주일 수익률 (%)
+            - rsi: RSI 지표 (0-100)
+            - from_high: 52주 고점 대비 (%)
+            - volatility: 연환산 변동성 (%)
+            - ma20, ma60: 이동평균선 값
+            - above_ma20, above_ma60: 이평선 위/아래 여부
+        condition: 시장 상태 분석 결과
+            - trend: 추세 문자열 (상승/하락/혼조)
+        gainers: 상승 상위 종목 리스트 (선택)
+        losers: 하락 상위 종목 리스트 (선택)
+        phase: 경기 사이클 국면 문자열 (선택)
+
+    Returns:
+        List[Dict]: 포스트 리스트. 각 포스트는 다음을 포함:
+            - persona: 페르소나 정보
+            - message: 의견 메시지
+            - timestamp: 작성 시간
+            - likes, comments: 반응 수
+            - validity: 논리 유효기간
+            - conditions: 유효 조건 리스트
+            - invalidate: 무효화 조건
+            - confidence: 신뢰도 (0-100, None 가능)
+
+    유지보수 노트:
+        - 새 페르소나 추가 시: TRADER_PERSONAS에 추가 후 이 함수에 로직 추가
+        - 논리 조건은 시장 지표에 따라 동적으로 생성됨
+        - 신뢰도(confidence)는 None일 수 있음 (개미투자자)
     """
     posts = []
+
+    # 주요 지표 추출 (기본값 포함)
     return_1m = metrics.get('return_1m', 0)
     return_1w = metrics.get('return_1w', 0)
     rsi = metrics.get('rsi', 50)

@@ -1,6 +1,34 @@
 """
 UI 컴포넌트 모듈
-재사용 가능한 Streamlit UI 컴포넌트
+==================
+
+재사용 가능한 Streamlit UI 컴포넌트들을 제공합니다.
+
+모듈 구성:
+---------
+- stock_search: 종목 검색 자동완성
+- watchlist: 관심 종목 저장/관리
+- price_alert: 가격 알림 설정
+- easy_explanation: 초보자용 쉬운 설명
+
+사용 예시:
+---------
+    from components import render_stock_search, add_to_watchlist
+
+    # 종목 검색 UI 렌더링
+    selected = render_stock_search()
+    if selected:
+        add_to_watchlist(selected['code'], selected['name'])
+
+데이터 저장 위치:
+---------------
+- 워치리스트: data/watchlists/*.json
+- 알림: data/alerts.json
+
+유지보수 노트:
+------------
+- 새 컴포넌트 추가 시 이 파일에 import 추가
+- __all__ 리스트 업데이트 필수
 """
 
 from components.stock_search import (
