@@ -4,16 +4,20 @@ BOK (Bank of Korea) 경제 데이터
 """
 
 import os
+import logging
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 try:
     import requests
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
+
 
 
 @dataclass
@@ -175,23 +179,91 @@ class BOKIndicators:
         """소비자물가지수 이력"""
         return self.get_indicator('cpi', months=24) or self._get_sample_indicator('cpi')
 
-    def get_exchange_rates(self) -> Dict[str, float]:
-        """현재 환율"""
+    def _fetch_realtime_exchange_rates(self) -> Dict[str, float]:
+        """
+        실시간 환율 조회 (무료 API 사용)
+
+        Returns:
+            환율 딕셔너리 또는 빈 딕셔너리
+        """
         rates = {}
 
+        if not REQUESTS_AVAILABLE:
+            return rates
+
+        # 1. exchangerate-api.com (무료)
+        try:
+            url = "https://open.er-api.com/v6/latest/USD"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('result') == 'success':
+                    krw_rate = data['rates'].get('KRW')
+                    if krw_rate:
+                        rates['usd_krw'] = krw_rate
+                        # EUR, JPY, CNY 대비 KRW 계산
+                        eur_usd = data['rates'].get('EUR', 0)
+                        jpy_usd = data['rates'].get('JPY', 0)
+                        cny_usd = data['rates'].get('CNY', 0)
+                        if eur_usd:
+                            rates['eur_krw'] = krw_rate / eur_usd
+                        if jpy_usd:
+                            rates['jpy_krw'] = krw_rate / jpy_usd  # 1엔당
+                        if cny_usd:
+                            rates['cny_krw'] = krw_rate / cny_usd
+                        logger.info(f"실시간 환율 조회 성공: USD/KRW={krw_rate:,.0f}")
+                        return rates
+        except Exception as e:
+            logger.warning(f"exchangerate-api 조회 실패: {e}")
+
+        # 2. 네이버 금융 스크래핑 (폴백)
+        try:
+            url = "https://finance.naver.com/marketindex/exchangeDetail.naver?marketindexCd=FX_USDKRW"
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                import re
+                # 현재 환율 파싱
+                match = re.search(r'<span class="value">([\d,]+\.?\d*)</span>', response.text)
+                if match:
+                    usd_krw = float(match.group(1).replace(',', ''))
+                    rates['usd_krw'] = usd_krw
+                    logger.info(f"네이버 환율 조회 성공: USD/KRW={usd_krw:,.0f}")
+        except Exception as e:
+            logger.warning(f"네이버 환율 조회 실패: {e}")
+
+        return rates
+
+    def get_exchange_rates(self) -> Dict[str, float]:
+        """
+        현재 환율 조회
+
+        우선순위:
+        1. 무료 실시간 API (exchangerate-api, 네이버)
+        2. BOK API 데이터
+        3. 샘플 데이터 (폴백)
+        """
+        # 샘플 데이터 (폴백용, 2025년 1월 기준)
+        sample_rates = {
+            'usd_krw': 1450,
+            'eur_krw': 1510,
+            'jpy_krw': 9.3,
+            'cny_krw': 199,
+        }
+
+        # 1. 실시간 환율 조회 시도
+        rates = self._fetch_realtime_exchange_rates()
+
+        # 2. 누락된 환율은 BOK API 또는 샘플 데이터로 채움
         for key in ['usd_krw', 'eur_krw', 'jpy_krw', 'cny_krw']:
-            df = self.get_indicator(key, months=1)
-            if df is not None and not df.empty:
-                rates[key] = df['value'].iloc[-1]
-            else:
-                # 샘플 데이터 (2025년 1월 기준)
-                sample_rates = {
-                    'usd_krw': 1450,
-                    'eur_krw': 1510,
-                    'jpy_krw': 9.3,
-                    'cny_krw': 199,
-                }
-                rates[key] = sample_rates.get(key, 0)
+            if key not in rates or rates[key] == 0:
+                # BOK API 시도
+                df = self.get_indicator(key, months=1)
+                if df is not None and not df.empty:
+                    rates[key] = df['value'].iloc[-1]
+                else:
+                    # 샘플 데이터 사용
+                    rates[key] = sample_rates.get(key, 0)
 
         return rates
 
