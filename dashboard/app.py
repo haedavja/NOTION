@@ -89,6 +89,12 @@ except ImportError:
     NOTIFICATION_AVAILABLE = False
 
 try:
+    from dashboard.rally_page import render_rally_dashboard
+    RALLY_ANALYZER_AVAILABLE = True
+except ImportError:
+    RALLY_ANALYZER_AVAILABLE = False
+
+try:
     from dashboard.keyboard_shortcuts import inject_keyboard_shortcuts, add_shortcut_indicator
     SHORTCUTS_AVAILABLE = True
 except ImportError:
@@ -591,11 +597,12 @@ def main():
         "🧠 AI 어시스턴트",
         "📅 캘린더/워치",
         "🔬 고급 분석",
+        "🔥 상승논리 분석",
         "🔔 알림"
     ]
     tabs = st.tabs(tab_names)
     (tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9,
-     tab10, tab11, tab12, tab13, tab14, tab15) = tabs
+     tab10, tab11, tab12, tab13, tab14, tab15, tab16) = tabs
 
     # ========== 탭 1: 종합 예측 ==========
     with tab1:
@@ -953,8 +960,23 @@ def main():
             - 🔍 ETF 스크리너
             """)
 
-    # ========== 탭 15: 알림 ==========
+    # ========== 탭 15: 상승논리 분석 ==========
     with tab15:
+        if RALLY_ANALYZER_AVAILABLE:
+            render_rally_dashboard()
+        else:
+            st.warning("상승논리 분석 모듈을 사용할 수 없습니다.")
+            st.info("rally_page 모듈을 확인하세요.")
+            st.markdown("""
+            **포함 기능:**
+            - 🔥 급등 종목 감지
+            - 🔍 상승 논리 추출
+            - ✅ 논리 검증 및 신뢰도 평가
+            - 📊 섹터별 분석
+            """)
+
+    # ========== 탭 16: 알림 ==========
+    with tab16:
         if NOTIFICATION_AVAILABLE:
             render_notification_dashboard()
         else:
