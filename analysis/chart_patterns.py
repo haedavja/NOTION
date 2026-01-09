@@ -10,6 +10,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from scipy.signal import argrelextrema
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PatternType(Enum):
@@ -387,7 +390,8 @@ class ChartPatternAnalyzer:
         try:
             high_slope = np.polyfit(x, highs, 1)[0]
             low_slope = np.polyfit(x, lows, 1)[0]
-        except Exception:
+        except Exception as e:
+            logger.debug(f"추세선 계산 실패: {e}")
             return []
 
         # 패턴 분류
@@ -453,7 +457,8 @@ class ChartPatternAnalyzer:
         try:
             high_slope = np.polyfit(x, highs, 1)[0]
             low_slope = np.polyfit(x, lows, 1)[0]
-        except Exception:
+        except Exception as e:
+            logger.debug(f"추세선 계산 실패: {e}")
             return []
 
         # 라이징 웨지 (두 추세선이 모두 상승하지만 수렴)

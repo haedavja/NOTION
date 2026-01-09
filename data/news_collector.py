@@ -8,6 +8,9 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import os
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     from newsapi import NewsApiClient
@@ -166,7 +169,7 @@ class NewsCollector:
                 articles = self.get_news_from_rss(feed_name=feed_name)
                 all_articles.extend(articles)
             except Exception as e:
-                print(f"Warning: {feed_name} 수집 실패 - {e}")
+                logger.warning(f"RSS 피드 수집 실패 ({feed_name}): {e}")
 
         return all_articles
 
@@ -244,8 +247,8 @@ class NewsCollector:
             try:
                 api_articles = self.get_news_from_api()
                 articles.extend(api_articles)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"NewsAPI 수집 실패: {e}")
 
         # 중복 제거 (제목 기준)
         seen_titles = set()

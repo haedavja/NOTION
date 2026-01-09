@@ -7,6 +7,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
+from utils.validators import validate_alert_input
 
 try:
     from alerts.notification import notification_manager, NotificationMessage
@@ -175,21 +176,29 @@ def render_alert_rules():
         new_target = st.number_input("목표값", min_value=0.0, step=100.0)
 
     if st.button("알림 추가", type="primary"):
-        if new_symbol and new_target > 0:
+        # 입력 검증
+        validation = validate_alert_input(
+            symbol=new_symbol,
+            target_value=new_target,
+            condition=new_condition[1]
+        )
+
+        if not validation.is_valid:
+            for error in validation.get_all_error_messages():
+                st.error(error)
+        else:
             try:
                 from alerts.price_monitor import AlertCondition
                 price_monitor.add_alert(
-                    symbol=new_symbol,
+                    symbol=validation.sanitized.get('symbol', new_symbol),
                     name=new_name or new_symbol,
                     condition=AlertCondition(new_condition[1]),
-                    target_value=new_target
+                    target_value=validation.sanitized.get('target_value', new_target)
                 )
                 st.success("알림이 추가되었습니다.")
                 st.rerun()
             except Exception as e:
                 st.error(f"추가 실패: {e}")
-        else:
-            st.error("심볼과 목표값을 입력하세요.")
 
 
 def render_channel_settings():

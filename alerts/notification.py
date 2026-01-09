@@ -7,6 +7,7 @@ import os
 import json
 import smtplib
 import requests
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
@@ -14,6 +15,8 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field, asdict
 from abc import ABC, abstractmethod
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -327,7 +330,8 @@ class NotificationManager:
             if self.history_file.exists():
                 with open(self.history_file, 'r', encoding='utf-8') as f:
                     self.history = json.load(f)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"알림 히스토리 로드 실패: {e}")
             self.history = []
 
     def _save_history(self):
@@ -338,8 +342,8 @@ class NotificationManager:
             self.history = self.history[-1000:]
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 json.dump(self.history, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"알림 히스토리 저장 실패: {e}")
 
     def _is_quiet_hours(self) -> bool:
         """무음 시간 확인"""

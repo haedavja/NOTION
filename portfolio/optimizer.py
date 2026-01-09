@@ -10,6 +10,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from scipy.optimize import minimize
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     import yfinance as yf
@@ -69,7 +72,7 @@ class PortfolioOptimizer:
             return len(self.returns_data) > 0
 
         except Exception as e:
-            print(f"데이터 로드 실패: {e}")
+            logger.error(f"데이터 로드 실패: {e}")
             return False
 
     def calculate_portfolio_metrics(self, weights: np.ndarray) -> Tuple[float, float, float]:
@@ -255,7 +258,8 @@ class PortfolioOptimizer:
                     sharpe_ratio=result.sharpe_ratio,
                     weights=result.weights
                 ))
-            except Exception:
+            except Exception as e:
+                logger.debug(f"목표 수익률 {target:.2%} 최적화 실패: {e}")
                 continue
 
         return frontier_points

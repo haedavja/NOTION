@@ -5,9 +5,12 @@
 
 import pandas as pd
 import numpy as np
+import logging
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 try:
     import yfinance as yf

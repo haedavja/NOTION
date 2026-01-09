@@ -11,6 +11,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     import yfinance as yf
@@ -113,7 +116,7 @@ class PriceMonitor:
                     alert = PriceAlert.from_dict(alert_data)
                     self.alerts[alert.id] = alert
             except Exception as e:
-                print(f"Price alerts load error: {e}")
+                logger.warning(f"가격 알림 로드 실패: {e}")
 
     def _save_alerts(self):
         """알림 설정 저장"""
@@ -125,7 +128,7 @@ class PriceMonitor:
                     'updated_at': datetime.now().isoformat()
                 }, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"Price alerts save error: {e}")
+            logger.error(f"가격 알림 저장 실패: {e}")
 
     def add_alert(self, symbol: str, name: str, condition: AlertCondition,
                   target_value: float, base_price: float = None) -> PriceAlert:
@@ -212,7 +215,7 @@ class PriceMonitor:
             return price_data
 
         except Exception as e:
-            print(f"Price fetch error for {symbol}: {e}")
+            logger.debug(f"가격 조회 실패 ({symbol}): {e}")
             return None
 
     def check_alerts(self) -> List[TriggeredAlert]:
@@ -283,7 +286,7 @@ class PriceMonitor:
                     try:
                         callback(triggered_alert)
                     except Exception as e:
-                        print(f"Callback error: {e}")
+                        logger.warning(f"알림 콜백 실행 실패: {e}")
 
         if triggered:
             self._save_alerts()
@@ -312,7 +315,7 @@ class PriceMonitor:
             try:
                 self.check_alerts()
             except Exception as e:
-                print(f"Monitor loop error: {e}")
+                logger.error(f"모니터링 루프 오류: {e}")
 
             time.sleep(self._check_interval)
 
