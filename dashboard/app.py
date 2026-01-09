@@ -76,6 +76,24 @@ try:
 except ImportError:
     CALENDAR_AVAILABLE = False
 
+try:
+    from dashboard.advanced_analysis_page import render_advanced_analysis_page
+    ADVANCED_ANALYSIS_AVAILABLE = True
+except ImportError:
+    ADVANCED_ANALYSIS_AVAILABLE = False
+
+try:
+    from dashboard.notification_page import render_notification_dashboard
+    NOTIFICATION_AVAILABLE = True
+except ImportError:
+    NOTIFICATION_AVAILABLE = False
+
+try:
+    from dashboard.keyboard_shortcuts import inject_keyboard_shortcuts, add_shortcut_indicator
+    SHORTCUTS_AVAILABLE = True
+except ImportError:
+    SHORTCUTS_AVAILABLE = False
+
 
 # 페이지 설정
 st.set_page_config(
@@ -552,6 +570,11 @@ def main():
     # 구분선
     st.divider()
 
+    # 키보드 단축키 삽입
+    if SHORTCUTS_AVAILABLE:
+        inject_keyboard_shortcuts()
+        add_shortcut_indicator()
+
     # 탭 구성 (동적으로 탭 추가)
     tab_names = [
         "🎯 종합 예측",
@@ -566,10 +589,13 @@ def main():
         "🔧 고급 기능",
         "🛠️ 투자 도구",
         "🧠 AI 어시스턴트",
-        "📅 캘린더/워치"
+        "📅 캘린더/워치",
+        "🔬 고급 분석",
+        "🔔 알림"
     ]
     tabs = st.tabs(tab_names)
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = tabs
+    (tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9,
+     tab10, tab11, tab12, tab13, tab14, tab15) = tabs
 
     # ========== 탭 1: 종합 예측 ==========
     with tab1:
@@ -910,6 +936,36 @@ def main():
             - ⭐ 워치리스트 관리
             - 📊 차트 패턴 분석
             - 💾 데이터 백업/복원
+            """)
+
+    # ========== 탭 14: 고급 분석 ==========
+    with tab14:
+        if ADVANCED_ANALYSIS_AVAILABLE:
+            render_advanced_analysis_page()
+        else:
+            st.warning("고급 분석 모듈을 사용할 수 없습니다.")
+            st.info("advanced_analysis_page 모듈을 확인하세요.")
+            st.markdown("""
+            **포함 기능:**
+            - 📊 포트폴리오 최적화 (MPT)
+            - 📝 투자 일지
+            - 📈 재무제표 분석
+            - 🔍 ETF 스크리너
+            """)
+
+    # ========== 탭 15: 알림 ==========
+    with tab15:
+        if NOTIFICATION_AVAILABLE:
+            render_notification_dashboard()
+        else:
+            st.warning("알림 대시보드 모듈을 사용할 수 없습니다.")
+            st.info("notification_page 모듈을 확인하세요.")
+            st.markdown("""
+            **포함 기능:**
+            - 📜 알림 히스토리
+            - 📋 알림 규칙 관리
+            - 🔧 채널 설정
+            - 📊 알림 통계
             """)
 
     # 푸터

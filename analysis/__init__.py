@@ -17,6 +17,14 @@ from .chart_patterns import (
     ChartPatternAnalyzer, PatternType, PatternSignal, PatternResult,
     SupportResistance, chart_analyzer, analyze_patterns, find_support_resistance
 )
+from .financial_statements import (
+    FinancialAnalyzer, FinancialMetrics, CompanyProfile, FinancialAnalysisResult,
+    financial_analyzer, analyze_financials, compare_companies, get_valuation
+)
+from .etf_screener import (
+    ETFScreener, ETFInfo, ETFComparison,
+    etf_screener, screen_etfs, compare_etfs, get_etf_themes
+)
 
 __all__ = [
     'MacroAnalyzer', 'FlowAnalyzer', 'SentimentAnalyzer', 'TechnicalAnalyzer',
@@ -28,5 +36,9 @@ __all__ = [
     'StockComparator', 'StockMetrics', 'ComparisonResult', 'stock_comparator',
     'SocialSentimentAnalyzer', 'SentimentScore', 'social_analyzer',
     'ChartPatternAnalyzer', 'PatternType', 'PatternSignal', 'PatternResult',
-    'SupportResistance', 'chart_analyzer', 'analyze_patterns', 'find_support_resistance'
+    'SupportResistance', 'chart_analyzer', 'analyze_patterns', 'find_support_resistance',
+    'FinancialAnalyzer', 'FinancialMetrics', 'CompanyProfile', 'FinancialAnalysisResult',
+    'financial_analyzer', 'analyze_financials', 'compare_companies', 'get_valuation',
+    'ETFScreener', 'ETFInfo', 'ETFComparison',
+    'etf_screener', 'screen_etfs', 'compare_etfs', 'get_etf_themes'
 ]

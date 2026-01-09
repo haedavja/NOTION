@@ -19,6 +19,15 @@ from .watchlist import (
     WatchlistManager, WatchlistItem as WatchlistEntry, WatchlistGroupInfo,
     watchlist_manager, add_to_watchlist, get_watchlist, update_watchlist_prices
 )
+from .optimizer import (
+    PortfolioOptimizer, OptimizationResult, EfficientFrontierPoint,
+    portfolio_optimizer, optimize_portfolio
+)
+from .journal import (
+    InvestmentJournal, TradeJournalEntry, GeneralNote, ReviewEntry,
+    EmotionTag, TradeType, JournalCategory,
+    investment_journal, add_trade_entry, add_note, get_recent_trades
+)
 
 __all__ = [
     'Portfolio', 'Position', 'PortfolioAnalyzer',
@@ -32,5 +41,10 @@ __all__ = [
     'PortfolioRebalancer', 'RebalanceReport', 'rebalancer',
     'TaxCalculator', 'TaxCalculation', 'MarketType', 'tax_calculator',
     'WatchlistManager', 'WatchlistEntry', 'WatchlistGroupInfo',
-    'watchlist_manager', 'add_to_watchlist', 'get_watchlist', 'update_watchlist_prices'
+    'watchlist_manager', 'add_to_watchlist', 'get_watchlist', 'update_watchlist_prices',
+    'PortfolioOptimizer', 'OptimizationResult', 'EfficientFrontierPoint',
+    'portfolio_optimizer', 'optimize_portfolio',
+    'InvestmentJournal', 'TradeJournalEntry', 'GeneralNote', 'ReviewEntry',
+    'EmotionTag', 'TradeType', 'JournalCategory',
+    'investment_journal', 'add_trade_entry', 'add_note', 'get_recent_trades'
 ]
