@@ -163,6 +163,37 @@ try:
 except ImportError:
     MARKET_OVERVIEW_AVAILABLE = False
 
+# SNS 토론 기능
+try:
+    from dashboard.market_overview_page import (
+        generate_sns_market_discussion,
+        calculate_market_metrics,
+        analyze_market_condition,
+        fetch_market_index_data,
+        fetch_top_movers,
+        TRADER_PERSONAS
+    )
+    SNS_DISCUSSION_AVAILABLE = True
+except ImportError:
+    SNS_DISCUSSION_AVAILABLE = False
+
+# Snowflake 분석
+try:
+    from analysis.snowflake_viz import (
+        snowflake_analyzer, create_snowflake_chart,
+        get_overall_rating, SnowflakeScores
+    )
+    SNOWFLAKE_ANALYSIS_AVAILABLE = True
+except ImportError:
+    SNOWFLAKE_ANALYSIS_AVAILABLE = False
+
+# 잠재적 요인 분석
+try:
+    from analysis.potential_analyzer import PotentialAnalyzer
+    POTENTIAL_ANALYSIS_AVAILABLE = True
+except ImportError:
+    POTENTIAL_ANALYSIS_AVAILABLE = False
+
 try:
     from components.watchlist import render_watchlist_manager
     WATCHLIST_AVAILABLE = True
@@ -394,6 +425,151 @@ def create_time_series_chart(data: pd.DataFrame, columns: list, title: str):
 
 
 # ==================== 페이지 렌더링 함수 ====================
+def render_sns_discussion_compact(metrics: dict, condition: dict, gainers: list, losers: list):
+    """메인 대시보드용 SNS 토론 컴팩트 버전"""
+    st.markdown("### 💬 트레이더들의 시장 토론")
+    st.caption("6명의 전문가가 현재 시장을 분석합니다")
+
+    posts = generate_sns_market_discussion(metrics, condition, gainers, losers, None)
+
+    # 상위 3개 의견만 표시
+    for post in posts[:3]:
+        persona = post['persona']
+        confidence = post.get('confidence')
+
+        # 신뢰도 색상
+        if confidence is not None:
+            conf_color = '#22c55e' if confidence >= 70 else '#eab308' if confidence >= 50 else '#ef4444'
+        else:
+            conf_color = '#6b7280'
+
+        st.markdown(f"""
+        <div style='background: white; border: 1px solid #e5e7eb; border-left: 4px solid {persona["color"]};
+                    border-radius: 8px; padding: 0.8rem; margin-bottom: 0.5rem;'>
+            <div style='display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;'>
+                <span style='font-size: 1.3rem;'>{persona["avatar"]}</span>
+                <span style='font-weight: bold; color: {persona["color"]};'>{persona["name"]}</span>
+                <span style='font-size: 0.75rem; color: #9ca3af;'>{post["timestamp"]}</span>
+            </div>
+            <div style='font-size: 0.9rem; line-height: 1.5; margin-bottom: 0.3rem;'>
+                {post["message"][:150]}{"..." if len(post["message"]) > 150 else ""}
+            </div>
+            <div style='display: flex; gap: 1rem; font-size: 0.8rem; color: #6b7280;'>
+                <span>❤️ {post["likes"]}</span>
+                <span>💬 {post["comments"]}</span>
+                {"<span style='background: " + conf_color + "20; color: " + conf_color + "; padding: 2px 6px; border-radius: 10px;'>신뢰도 " + str(confidence) + "%</span>" if confidence else ""}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 더보기 버튼
+    if st.button("💬 전체 토론 보기", key="view_all_discussion", use_container_width=True):
+        st.session_state.current_page = 'market_overview'
+        st.rerun()
+
+
+def render_snowflake_compact():
+    """메인 대시보드용 Snowflake 분석 컴팩트 버전"""
+    st.markdown("### ❄️ 주요 종목 Snowflake")
+    st.caption("6축 레이더 차트로 종목 특성을 한눈에")
+
+    # 샘플 종목 데이터
+    sample_stocks = {
+        '삼성전자': {'per': 15.2, 'pbr': 1.3, 'roe': 8.5, 'dividend_yield': 2.1,
+                   'debt_ratio': 35, 'current_ratio': 2.5, 'revenue_growth': 5,
+                   'earnings_growth': 8, 'operating_margin': 12, 'net_margin': 10},
+        'SK하이닉스': {'per': 8.5, 'pbr': 1.8, 'roe': 21, 'dividend_yield': 1.2,
+                    'debt_ratio': 45, 'current_ratio': 2.0, 'revenue_growth': 25,
+                    'earnings_growth': 35, 'operating_margin': 20, 'net_margin': 18},
+        '현대차': {'per': 6.5, 'pbr': 0.6, 'roe': 10, 'dividend_yield': 4.5,
+                 'debt_ratio': 120, 'current_ratio': 1.2, 'revenue_growth': 8,
+                 'earnings_growth': 15, 'operating_margin': 8, 'net_margin': 6},
+    }
+
+    selected = st.selectbox("종목 선택", list(sample_stocks.keys()), key="main_snowflake_select")
+    stock_data = sample_stocks[selected]
+
+    scores = snowflake_analyzer.calculate_scores(fundamentals=stock_data, sector='default')
+    grade, emoji, description = get_overall_rating(scores)
+
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        fig = create_snowflake_chart(scores, selected)
+        fig.update_layout(height=280, margin=dict(l=30, r=30, t=30, b=30))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.markdown(f"### {emoji} {grade}")
+        st.caption(description)
+        st.markdown(f"""
+        | 지표 | 점수 |
+        |:---:|:---:|
+        | 가치 | {scores.value:.1f}/6 |
+        | 미래 | {scores.future:.1f}/6 |
+        | 과거 | {scores.past:.1f}/6 |
+        | 배당 | {scores.dividend:.1f}/6 |
+        | 건전성 | {scores.health:.1f}/6 |
+        | **종합** | **{scores.total:.1f}/6** |
+        """)
+
+    if st.button("❄️ Snowflake 상세 분석", key="view_snowflake", use_container_width=True):
+        st.session_state.current_page = 'snowflake'
+        st.rerun()
+
+
+def render_catalyst_compact():
+    """메인 대시보드용 잠재적 요인 분석 컴팩트 버전"""
+    st.markdown("### 🎯 잠재적 급등/급락 요인")
+    st.caption("발생 전 선제적으로 파악하는 핵심 촉매")
+
+    analyzer = PotentialAnalyzer()
+
+    # 샘플 분석 (실제로는 실시간 데이터)
+    sample_analyses = [
+        {"symbol": "005930", "name": "삼성전자", "type": "bullish",
+         "catalyst": "AI반도체 수요 급증", "probability": "높음", "impact": "상", "timeframe": "3개월 내"},
+        {"symbol": "000660", "name": "SK하이닉스", "type": "bullish",
+         "catalyst": "HBM3E 양산 본격화", "probability": "매우높음", "impact": "상", "timeframe": "1개월 내"},
+        {"symbol": "035720", "name": "카카오", "type": "bearish",
+         "catalyst": "규제 리스크 지속", "probability": "중간", "impact": "중", "timeframe": "6개월 내"},
+    ]
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**🚀 상승 촉매**")
+        for item in [a for a in sample_analyses if a['type'] == 'bullish'][:2]:
+            st.markdown(f"""
+            <div style='background: #dcfce7; padding: 0.6rem; border-radius: 8px;
+                        border-left: 3px solid #22c55e; margin-bottom: 0.4rem;'>
+                <div style='font-weight: bold; color: #166534;'>{item['name']}</div>
+                <div style='font-size: 0.85rem;'>{item['catalyst']}</div>
+                <div style='font-size: 0.75rem; color: #4ade80;'>
+                    확률: {item['probability']} | 영향: {item['impact']} | {item['timeframe']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("**⚠️ 하락 촉매**")
+        for item in [a for a in sample_analyses if a['type'] == 'bearish'][:2]:
+            st.markdown(f"""
+            <div style='background: #fee2e2; padding: 0.6rem; border-radius: 8px;
+                        border-left: 3px solid #ef4444; margin-bottom: 0.4rem;'>
+                <div style='font-weight: bold; color: #991b1b;'>{item['name']}</div>
+                <div style='font-size: 0.85rem;'>{item['catalyst']}</div>
+                <div style='font-size: 0.75rem; color: #f87171;'>
+                    확률: {item['probability']} | 영향: {item['impact']} | {item['timeframe']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    if st.button("🎯 잠재 요인 상세 분석", key="view_potential", use_container_width=True):
+        st.session_state.current_page = 'potential'
+        st.rerun()
+
+
 def render_dashboard_page(data, prediction, scenario_summary):
     """대시보드 (홈) 페이지 - 한국 시장 중심"""
     st.markdown("## 📊 한국 주식 대시보드")
@@ -500,6 +676,54 @@ def render_dashboard_page(data, prediction, scenario_summary):
 
         except Exception as e:
             st.warning(f"한국 시장 데이터 로드 중 오류: {e}")
+
+    # ==================== 핵심 분석 기능 ====================
+    st.markdown("---")
+    st.markdown("## 🔥 핵심 분석 기능")
+
+    # 1. SNS 스타일 시장 토론
+    if SNS_DISCUSSION_AVAILABLE:
+        try:
+            # 시장 데이터 가져오기
+            index_data = fetch_market_index_data(60)
+            gainers, losers = fetch_top_movers(5)
+
+            if index_data and 'KOSPI' in index_data:
+                kospi_data = index_data['KOSPI']
+                metrics = calculate_market_metrics(kospi_data)
+                condition = analyze_market_condition(metrics)
+                render_sns_discussion_compact(metrics, condition, gainers, losers)
+            else:
+                st.info("시장 토론: 데이터 로딩 중...")
+        except Exception as e:
+            st.caption(f"시장 토론 로드 오류: {e}")
+    else:
+        st.info("💬 SNS 시장 토론 기능을 사용하려면 market_overview 모듈이 필요합니다.")
+
+    st.divider()
+
+    # 2. Snowflake 분석 & 3. 잠재적 요인 분석 (나란히 배치)
+    col_snow, col_catalyst = st.columns(2)
+
+    with col_snow:
+        if SNOWFLAKE_ANALYSIS_AVAILABLE:
+            try:
+                render_snowflake_compact()
+            except Exception as e:
+                st.caption(f"Snowflake 로드 오류: {e}")
+        else:
+            st.info("❄️ Snowflake 분석 기능을 사용하려면 snowflake_viz 모듈이 필요합니다.")
+
+    with col_catalyst:
+        if POTENTIAL_ANALYSIS_AVAILABLE:
+            try:
+                render_catalyst_compact()
+            except Exception as e:
+                st.caption(f"잠재 요인 분석 로드 오류: {e}")
+        else:
+            st.info("🎯 잠재 요인 분석 기능을 사용하려면 potential_analyzer 모듈이 필요합니다.")
+
+    st.divider()
 
     # 빠른 이동 버튼
     st.markdown("### 🔗 빠른 이동")
