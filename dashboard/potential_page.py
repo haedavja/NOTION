@@ -718,7 +718,7 @@ def render_catalyst_table(catalysts: List[PotentialCatalyst], is_bullish: bool):
             with col1:
                 st.markdown(f"**설명**: {catalyst.description}")
                 st.markdown(f"**영향도**: {catalyst.impact.korean} ({catalyst.impact.score}점)")
-                st.markdown(f"**발생 확률**: {catalyst.probability.korean} ({catalyst.probability.value*100:.0f}%)")
+                st.markdown(f"**발생 확률**: {catalyst.probability.korean} ({catalyst.probability.prob_value*100:.0f}%)")
                 st.markdown(f"**예상 시점**: {catalyst.timeframe.description}")
 
             with col2:

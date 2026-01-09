@@ -67,9 +67,9 @@ class Probability(Enum):
     LOW = ("낮음", 0.3, "#98D8C8")
     VERY_LOW = ("매우 낮음", 0.1, "#87CEEB")
 
-    def __init__(self, korean: str, value: float, color: str):
+    def __init__(self, korean: str, prob_value: float, color: str):
         self.korean = korean
-        self.value = value
+        self.prob_value = prob_value  # Python 3.13+ Enum 호환
         self.color = color
 
 
@@ -106,7 +106,7 @@ class PotentialCatalyst:
 
     def expected_value(self) -> float:
         """기대값 계산 (영향도 * 확률)"""
-        return self.impact.score * self.probability.value
+        return self.impact.score * self.probability.prob_value
 
 
 @dataclass
@@ -575,12 +575,12 @@ class PotentialAnalyzer:
         for c in bullish:
             if c.expected_move_pct:
                 avg_move = (c.expected_move_pct[0] + c.expected_move_pct[1]) / 2
-                upside += avg_move * c.probability.value
+                upside += avg_move * c.probability.prob_value
 
         for c in bearish:
             if c.expected_move_pct:
                 avg_move = abs((c.expected_move_pct[0] + c.expected_move_pct[1]) / 2)
-                downside += avg_move * c.probability.value
+                downside += avg_move * c.probability.prob_value
 
         if downside == 0:
             return 10.0 if upside > 0 else 1.0
