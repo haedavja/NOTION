@@ -95,6 +95,12 @@ except ImportError:
     RALLY_ANALYZER_AVAILABLE = False
 
 try:
+    from dashboard.potential_page import render_potential_dashboard
+    POTENTIAL_ANALYZER_AVAILABLE = True
+except ImportError:
+    POTENTIAL_ANALYZER_AVAILABLE = False
+
+try:
     from dashboard.keyboard_shortcuts import inject_keyboard_shortcuts, add_shortcut_indicator
     SHORTCUTS_AVAILABLE = True
 except ImportError:
@@ -598,11 +604,12 @@ def main():
         "📅 캘린더/워치",
         "🔬 고급 분석",
         "🔥 상승논리 분석",
+        "🎯 잠재적 요인",
         "🔔 알림"
     ]
     tabs = st.tabs(tab_names)
     (tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9,
-     tab10, tab11, tab12, tab13, tab14, tab15, tab16) = tabs
+     tab10, tab11, tab12, tab13, tab14, tab15, tab16, tab17) = tabs
 
     # ========== 탭 1: 종합 예측 ==========
     with tab1:
@@ -975,8 +982,23 @@ def main():
             - 📊 섹터별 분석
             """)
 
-    # ========== 탭 16: 알림 ==========
+    # ========== 탭 16: 잠재적 급등/급락 요인 ==========
     with tab16:
+        if POTENTIAL_ANALYZER_AVAILABLE:
+            render_potential_dashboard()
+        else:
+            st.warning("잠재적 요인 분석 모듈을 사용할 수 없습니다.")
+            st.info("potential_page 모듈을 확인하세요.")
+            st.markdown("""
+            **포함 기능:**
+            - 🚀 잠재적 급등 요인 분석
+            - ⚠️ 잠재적 급락 요인 분석
+            - 📊 개별 종목 잠재 요인 분석
+            - 🎯 리스크/보상 비율 평가
+            """)
+
+    # ========== 탭 17: 알림 ==========
+    with tab17:
         if NOTIFICATION_AVAILABLE:
             render_notification_dashboard()
         else:
