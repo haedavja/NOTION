@@ -9,6 +9,13 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 
+# 중앙화된 설정 사용
+try:
+    from config.constants import SNOWFLAKE
+    _USE_CENTRAL_CONFIG = True
+except ImportError:
+    _USE_CENTRAL_CONFIG = False
+
 
 @dataclass
 class SnowflakeScores:
@@ -22,9 +29,13 @@ class SnowflakeScores:
     @property
     def total(self) -> float:
         """종합 점수 (가중 평균) - 건전성/가치 비중 높임"""
-        # 기본 가중치: 건전성(25%), 가치(25%), 미래(20%), 과거(20%), 배당(10%)
-        weights = {'value': 0.25, 'future': 0.20, 'past': 0.20,
-                   'dividend': 0.10, 'health': 0.25}
+        # 중앙화된 설정 사용 (config.constants.SNOWFLAKE)
+        if _USE_CENTRAL_CONFIG:
+            weights = SNOWFLAKE.weights
+        else:
+            # 폴백: 기본 가중치
+            weights = {'value': 0.25, 'future': 0.20, 'past': 0.20,
+                       'dividend': 0.10, 'health': 0.25}
         return (self.value * weights['value'] +
                 self.future * weights['future'] +
                 self.past * weights['past'] +
@@ -55,16 +66,22 @@ class SnowflakeScores:
 class SnowflakeAnalyzer:
     """Snowflake 분석기"""
 
-    # 섹터별 평균 PER
-    SECTOR_AVG_PER = {
-        '반도체': 20, '소프트웨어': 30, 'IT': 25,
-        '금융': 10, '은행': 8, '보험': 12,
-        '바이오': 50, '제약': 25, '헬스케어': 22,
-        '자동차': 10, '철강': 8, '화학': 12,
-        '유통': 15, '미디어': 18, '엔터': 25,
-        '건설': 10, '조선': 15, '기계': 12,
-        '식품': 15, '음료': 20, 'default': 15
-    }
+    # 섹터별 평균 PER - 중앙화된 설정 사용
+    @property
+    def SECTOR_AVG_PER(self) -> Dict[str, float]:
+        if _USE_CENTRAL_CONFIG:
+            return SNOWFLAKE.sector_per
+        else:
+            # 폴백: 기본값
+            return {
+                '반도체': 20, '소프트웨어': 30, 'IT': 25,
+                '금융': 10, '은행': 8, '보험': 12,
+                '바이오': 50, '제약': 25, '헬스케어': 22,
+                '자동차': 10, '철강': 8, '화학': 12,
+                '유통': 15, '미디어': 18, '엔터': 25,
+                '건설': 10, '조선': 15, '기계': 12,
+                '식품': 15, '음료': 20, 'default': 15
+            }
 
     def calculate_scores(self,
                         fundamentals: Dict,
