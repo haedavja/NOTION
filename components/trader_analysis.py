@@ -306,15 +306,157 @@ def generate_trader_response_to_user(
     q_lower = user_question.lower()
     pattern = random.choice(trader.response_patterns)
 
-    # 키워드 기반 응답 생성
+    # 점수 추출
+    value_score = scores.get('value', 3)
+    future_score = scores.get('future', 3)
+    past_score = scores.get('past', 3)
+    health_score = scores.get('health', 3)
+    dividend_score = scores.get('dividend', 3)
+    total_score = scores.get('total', 3)
+    avg_score = (value_score + future_score + past_score + health_score + dividend_score) / 5
+
+    # === 공통 키워드 (모든 트레이더가 관심 있는 주제) ===
+
+    # 상장폐지/관리종목 관련
+    if any(w in q_lower for w in ['상장폐지', '폐지', '퇴출', '관리종목', '상폐']):
+        if health_score <= 2:
+            risk_msg = f"재무건전성 점수가 {health_score:.1f}/6으로 낮아 리스크가 있습니다."
+        elif health_score <= 3:
+            risk_msg = f"재무건전성 점수 {health_score:.1f}/6, 관심 필요한 수준입니다."
+        else:
+            risk_msg = f"재무건전성 점수 {health_score:.1f}/6으로 당장의 위험은 낮아 보입니다."
+
+        if trader.style == 'value':
+            return f"{pattern}, 상장폐지 여부는 재무건전성이 핵심입니다. {risk_msg} 부채비율과 현금흐름을 꼭 확인하세요."
+        elif trader.style == 'growth':
+            return f"{pattern}, 상장폐지보다 성장 둔화가 더 무섭습니다. 하지만 {risk_msg}"
+        elif trader.style == 'technical':
+            return f"{pattern}, 상장폐지 가능성은 차트보다 재무제표를 봐야 합니다. {risk_msg} 급락 시 거래정지 위험도 고려하세요."
+        elif trader.style == 'contrarian':
+            if health_score <= 2.5:
+                return f"{pattern}, 상장폐지 위기 종목은 역발상으로도 추천하기 어렵습니다. {risk_msg} 이건 '역발상'이 아니라 '도박'이에요."
+            else:
+                return f"{pattern}, 지나친 공포일 수 있습니다. {risk_msg} 실제로 폐지되는 종목은 소수예요."
+        elif trader.style == 'quant':
+            return f"{pattern}, {risk_msg} 통계적으로 건전성 점수 2점 이하 종목의 상장폐지 확률이 유의미하게 높습니다."
+        elif trader.style == 'momentum':
+            return f"{pattern}, 상장폐지 리스크가 있으면 모멘텀 전략은 적합하지 않습니다. {risk_msg} 안전한 종목에서 모멘텀을 찾으세요."
+
+    # 부도/파산 관련
+    if any(w in q_lower for w in ['부도', '파산', '망하', '도산', '파탄', '부실']):
+        if health_score <= 2:
+            return f"{pattern}, 재무건전성 {health_score:.1f}/6으로 우려됩니다. 부채비율, 이자보상배율, 현금흐름을 반드시 확인하세요. 감사의견도 중요합니다."
+        elif health_score <= 3:
+            return f"{pattern}, 재무건전성 {health_score:.1f}/6입니다. 당장 부도 위험은 낮지만 주의가 필요해요. 업황 악화 시 취약할 수 있습니다."
+        else:
+            return f"{pattern}, 재무건전성 {health_score:.1f}/6으로 양호합니다. 현재 데이터상 부도 위험은 낮아 보입니다."
+
+    # 위험/리스크 관련 (역발상 트레이더 확장)
+    if any(w in q_lower for w in ['위험', '리스크', '손실', '걱정', '불안', '위험성', '안전']):
+        if trader.style == 'value':
+            if value_score >= 4 and health_score >= 3.5:
+                return f"{pattern}, 저평가 + 재무건전성 양호면 하방 리스크가 제한적입니다. 안전마진이 있어요."
+            else:
+                return f"{pattern}, 가치점수 {value_score:.1f}, 건전성 {health_score:.1f}/6입니다. 싸지 않으면 리스크 대비 매력이 부족해요."
+        elif trader.style == 'growth':
+            return f"{pattern}, 성장주는 원래 변동성이 큽니다. 미래 점수 {future_score:.1f}/6인데, 성장 스토리가 꺾이면 하락폭도 큽니다."
+        elif trader.style == 'technical':
+            return f"{pattern}, 리스크 관리는 손절선 설정이 핵심입니다. -5~10% 손절, 목표가 도달 시 분할 익절하세요."
+        elif trader.style == 'contrarian':
+            if total_score <= 2.5:
+                return f"모두가 걱정할 때가 기회입니다. 하지만 진짜 위험한 종목도 있으니 재무건전성 {health_score:.1f}/6은 꼭 체크하세요."
+            else:
+                return f"지금은 공포 구간이 아니에요. 역발상 전략은 극단적 상황에서 효과적입니다."
+        elif trader.style == 'quant':
+            return f"{pattern}, 리스크를 수치화하면 건전성 {health_score:.1f}/6, 종합 {total_score:.1f}/6입니다. 분산투자로 개별 종목 리스크를 줄이세요."
+        elif trader.style == 'momentum':
+            return f"{pattern}, 모멘텀 투자의 리스크는 추세 이탈입니다. 빠른 손절이 생명이에요."
+
+    # 전망/앞으로 관련
+    if any(w in q_lower for w in ['전망', '앞으로', '향후', '미래', '어떻게 될', '될까요', '갈까요']):
+        if trader.style == 'value':
+            return f"{pattern}, 가치투자는 미래 예측이 아닌 현재 가치에 집중합니다. 가치점수 {value_score:.1f}/6 기준 {'저평가 매력 있음' if value_score >= 4 else '관망 권고'}입니다."
+        elif trader.style == 'growth':
+            if future_score >= 4:
+                return f"{pattern}, 미래 성장 점수 {future_score:.1f}/6으로 전망이 밝습니다! 성장 스토리가 유지되면 기대해볼 만해요."
+            else:
+                return f"{pattern}, 성장 전망 점수가 {future_score:.1f}/6입니다. 새로운 성장동력이 필요해 보여요."
+        elif trader.style == 'technical':
+            return f"{pattern}, 차트는 미래를 예측하지 않습니다. 추세를 따라가며 대응하는 거예요. 현재 종합점수 {total_score:.1f}/6입니다."
+        elif trader.style == 'contrarian':
+            return f"{pattern}, 전망은 항상 틀립니다. 모두가 좋다고 하면 조심하고, 모두가 비관적이면 관심을 가지세요."
+        elif trader.style == 'quant':
+            return f"{pattern}, 예측보다 확률에 집중합니다. 현재 팩터 평균 {avg_score:.2f}/6은 {'긍정적' if avg_score >= 4 else '중립적' if avg_score >= 3 else '부정적'} 신호입니다."
+        elif trader.style == 'momentum':
+            if future_score >= 4:
+                return f"{pattern}, 모멘텀 관점에서 미래 점수 {future_score:.1f}/6은 긍정적입니다. 추세가 이어질 가능성이 있어요."
+            else:
+                return f"{pattern}, 미래 점수 {future_score:.1f}/6은 모멘텀 약화 신호입니다. 추세 전환을 기다리세요."
+
+    # 매도/팔아야 관련
+    if any(w in q_lower for w in ['팔', '매도', '정리', '탈출', '빠져', '손절', '익절']):
+        if trader.style == 'value':
+            if value_score <= 2.5:
+                return f"{pattern}, 가치점수 {value_score:.1f}/6으로 고평가 구간입니다. 차익실현 고려하세요."
+            else:
+                return f"{pattern}, 가치투자는 싸게 사서 적정가에 파는 겁니다. 아직 저평가라면 보유하세요."
+        elif trader.style == 'growth':
+            if future_score <= 2.5:
+                return f"{pattern}, 성장 점수 {future_score:.1f}/6입니다. 성장 스토리가 꺾이면 매도 타이밍이에요."
+            else:
+                return f"{pattern}, 성장이 지속된다면 너무 이른 매도는 수익을 갉아먹습니다."
+        elif trader.style == 'technical':
+            return f"{pattern}, 손절은 직전 저점 -3~5%, 익절은 목표가 도달 또는 추세선 이탈 시입니다. 감정이 아닌 기준으로 팔아야 해요."
+        elif trader.style == 'contrarian':
+            if total_score >= 4.5:
+                return f"{pattern}, 모두가 좋다고 할 때가 팔 때입니다. 종합 {total_score:.1f}/6이면 차익실현 고려하세요."
+            else:
+                return f"{pattern}, 공포에 팔면 손해입니다. 왜 팔려고 하는지 냉정하게 생각해보세요."
+        elif trader.style == 'quant':
+            return f"{pattern}, 팩터 점수 평균 {avg_score:.2f}/6입니다. 2.5 이하면 매도, 4.0 이상이면 보유가 통계적으로 유리합니다."
+        elif trader.style == 'momentum':
+            return f"{pattern}, 모멘텀이 꺾이면 빠르게 팔아야 합니다. 미련은 금물이에요. 추세 이탈 = 즉시 손절입니다."
+
+    # 배당 관련
+    if any(w in q_lower for w in ['배당', '배당금', '배당률', '배당수익률']):
+        if trader.style == 'value':
+            if dividend_score >= 4:
+                return f"{pattern}, 배당점수 {dividend_score:.1f}/6으로 매력적입니다. 배당 + 저평가면 금상첨화죠."
+            else:
+                return f"{pattern}, 배당점수 {dividend_score:.1f}/6입니다. 배당보다 저평가 매력이 있는지 먼저 보세요."
+        elif trader.style == 'growth':
+            return f"{pattern}, 성장주는 배당보다 재투자가 중요합니다. 배당을 많이 주면 오히려 성장 동력이 약해질 수 있어요."
+        elif trader.style == 'quant':
+            return f"{pattern}, 배당점수 {dividend_score:.1f}/6입니다. 고배당주의 장기 수익률은 시장 평균과 비슷하거나 소폭 상회합니다."
+        else:
+            return f"{pattern}, 배당점수 {dividend_score:.1f}/6입니다. {'배당 매력 있음' if dividend_score >= 4 else '배당보다 다른 요소를 보세요'}."
+
+    # 실적/이익 관련
+    if any(w in q_lower for w in ['실적', '이익', '매출', '순이익', '영업이익', '적자', '흑자']):
+        if trader.style == 'value':
+            return f"{pattern}, 과거 실적 점수 {past_score:.1f}/6입니다. 이익이 꾸준해야 가치평가가 의미있어요."
+        elif trader.style == 'growth':
+            return f"{pattern}, 과거 실적({past_score:.1f}/6)도 중요하지만 미래 성장({future_score:.1f}/6)이 더 중요합니다."
+        elif trader.style == 'quant':
+            return f"{pattern}, 과거 실적 {past_score:.1f}/6, 미래 전망 {future_score:.1f}/6입니다. 두 팩터 모두 4점 이상이면 강력 신호입니다."
+        elif trader.style == 'momentum':
+            if past_score >= 3.5 and future_score >= 4:
+                return f"{pattern}, 실적 모멘텀이 좋습니다! 과거 {past_score:.1f}, 미래 {future_score:.1f}/6이면 추세 지속 가능성 높아요."
+            else:
+                return f"{pattern}, 실적 모멘텀이 약합니다. 과거 {past_score:.1f}, 미래 {future_score:.1f}/6입니다."
+        else:
+            return f"{pattern}, 과거 실적 {past_score:.1f}/6, 미래 전망 {future_score:.1f}/6입니다."
+
+    # === 트레이더별 특화 키워드 ===
+
     if trader.style == 'value':
         if any(w in q_lower for w in ['저평가', 'per', 'pbr', '가격', '싸']):
-            if scores.get('value', 3) >= 4:
-                return f"{pattern}, {stock_name}은 현재 밸류에이션 매력이 있습니다. 가치점수 {scores.get('value', 3):.1f}/6은 저평가 영역이에요."
+            if value_score >= 4:
+                return f"{pattern}, {stock_name}은 현재 밸류에이션 매력이 있습니다. 가치점수 {value_score:.1f}/6은 저평가 영역이에요."
             else:
-                return f"{pattern}, 솔직히 {stock_name}이 저평가라고 보기 어렵습니다. 가치점수가 {scores.get('value', 3):.1f}/6밖에 안 돼요."
+                return f"{pattern}, 솔직히 {stock_name}이 저평가라고 보기 어렵습니다. 가치점수가 {value_score:.1f}/6밖에 안 돼요."
         elif any(w in q_lower for w in ['매수', '사도', '들어가']):
-            if scores.get('value', 3) >= 4:
+            if value_score >= 4:
                 return f"가치투자 관점에서 지금 진입해도 됩니다. 다만 분할 매수로 리스크를 관리하세요."
             else:
                 return f"솔직히 지금은 가치투자 매력이 떨어집니다. 더 좋은 가격을 기다리거나 다른 종목을 보세요."
@@ -322,54 +464,43 @@ def generate_trader_response_to_user(
             return f"가치투자는 타이밍보다 가격입니다. 내재가치 대비 충분한 할인이 있을 때가 적기예요."
 
     elif trader.style == 'growth':
-        if any(w in q_lower for w in ['성장', '미래', '전망', '잠재력']):
-            if scores.get('future', 3) >= 4:
-                return f"{pattern}, {stock_name}의 성장 잠재력은 높습니다! 미래 점수 {scores.get('future', 3):.1f}/6이면 기대해볼 만해요."
+        if any(w in q_lower for w in ['성장', '잠재력']):
+            if future_score >= 4:
+                return f"{pattern}, {stock_name}의 성장 잠재력은 높습니다! 미래 점수 {future_score:.1f}/6이면 기대해볼 만해요."
             else:
-                return f"{pattern}, 성장 스토리가 약해요. 미래 점수 {scores.get('future', 3):.1f}/6은 아쉽습니다."
+                return f"{pattern}, 성장 스토리가 약해요. 미래 점수 {future_score:.1f}/6은 아쉽습니다."
         elif any(w in q_lower for w in ['신사업', '확장', '성장동력']):
             return f"성장주 투자의 핵심은 '다음 성장동력'이 있느냐입니다. 이 부분을 IR이나 뉴스로 확인해보세요."
         elif any(w in q_lower for w in ['매수', '들어가']):
-            if scores.get('future', 3) >= 4:
+            if future_score >= 4:
                 return f"성장 스토리가 살아있다면 지금 들어가도 됩니다. 다만 분기 실적 발표 일정은 체크하세요."
             else:
                 return f"솔직히 성장주로서의 매력이 떨어져요. 더 확실한 성장 종목이 있을 겁니다."
 
     elif trader.style == 'technical':
         if any(w in q_lower for w in ['차트', '추세', '지지', '저항']):
-            return f"{pattern}, 현재 종합 점수로 추세를 유추하면 {'상승' if scores.get('total', 3) >= 4 else '하락 또는 횡보'} 국면입니다."
+            return f"{pattern}, 현재 종합 점수로 추세를 유추하면 {'상승' if total_score >= 4 else '하락 또는 횡보'} 국면입니다."
         elif any(w in q_lower for w in ['매수', '진입', '타이밍']):
             return f"{pattern}, 정확한 타이밍은 실제 차트를 봐야 합니다. 펀더멘털 점수만으로는 기술적 진입점을 잡기 어려워요."
-        elif any(w in q_lower for w in ['손절', '익절']):
-            return f"손절선은 직전 저점 -3~5% 아래, 익절은 목표가 도달 또는 추세 이탈 시 설정하세요."
 
     elif trader.style == 'contrarian':
         if any(w in q_lower for w in ['다들', '모두', '인기', '핫한']):
             return f"{pattern}, 다들 좋다고 하면 이미 늦은 거예요. 역발상의 기본은 '남들이 무시할 때 사는 것'입니다."
-        elif any(w in q_lower for w in ['위험', '리스크', '걱정']):
-            if scores.get('total', 3) <= 2.5:
-                return f"모두가 걱정할 때가 기회입니다. 공포에 매수하고 탐욕에 매도하세요."
-            else:
-                return f"지금은 공포 구간이 아니에요. 역발상 전략은 극단적 상황에서 효과적입니다."
         elif any(w in q_lower for w in ['매수', '들어가']):
-            if scores.get('total', 3) >= 4.5:
+            if total_score >= 4.5:
                 return f"솔직히 지금은 너무 좋아 보여서 오히려 걱정입니다. 차익실현 타이밍 아닐까요?"
-            elif scores.get('total', 3) <= 2:
+            elif total_score <= 2:
                 return f"역발상 관점에서 흥미로운 구간입니다. 다만 왜 이렇게 싸졌는지 이유는 파악해야 해요."
             else:
                 return f"극단적 상황이 아니라서 역발상 전략이 잘 안 맞아요."
 
     elif trader.style == 'quant':
         if any(w in q_lower for w in ['데이터', '수치', '점수', '팩터']):
-            avg = (scores.get('value', 3) + scores.get('future', 3) + scores.get('past', 3) +
-                   scores.get('health', 3) + scores.get('dividend', 3)) / 5
-            return f"{pattern}, 5개 팩터 평균 {avg:.2f}/6입니다. {'상위 30%' if avg >= 4 else '중위권' if avg >= 3 else '하위권'}에 해당합니다."
+            return f"{pattern}, 5개 팩터 평균 {avg_score:.2f}/6입니다. {'상위 30%' if avg_score >= 4 else '중위권' if avg_score >= 3 else '하위권'}에 해당합니다."
         elif any(w in q_lower for w in ['확률', '통계', '백테스트']):
             return f"통계적으로 고팩터 종목이 저팩터 대비 연 3-5%p 초과수익을 보입니다. 단, 모든 상황에 적용되진 않아요."
         elif any(w in q_lower for w in ['매수', '들어가']):
-            avg = (scores.get('value', 3) + scores.get('future', 3) + scores.get('past', 3) +
-                   scores.get('health', 3) + scores.get('dividend', 3)) / 5
-            if avg >= 4:
+            if avg_score >= 4:
                 return f"퀀트 모델상 매수 신호입니다. 하지만 단일 종목 집중보다 분산 투자를 권합니다."
             else:
                 return f"현재 팩터 점수로는 매수 시그널이 아닙니다. 더 높은 점수의 종목을 찾아보세요."
@@ -377,19 +508,62 @@ def generate_trader_response_to_user(
     elif trader.style == 'momentum':
         if any(w in q_lower for w in ['수급', '거래량', '외국인', '기관']):
             return f"{pattern}, 실제 수급 데이터는 별도로 확인해야 합니다. 펀더멘털 점수만으로는 수급을 알 수 없어요."
-        elif any(w in q_lower for w in ['모멘텀', '추세', '강세']):
-            if scores.get('future', 3) >= 4:
-                return f"실적 모멘텀은 살아있어 보입니다. 미래 전망 점수가 {scores.get('future', 3):.1f}/6으로 양호해요."
+        elif any(w in q_lower for w in ['모멘텀', '강세']):
+            if future_score >= 4:
+                return f"실적 모멘텀은 살아있어 보입니다. 미래 전망 점수가 {future_score:.1f}/6으로 양호해요."
             else:
-                return f"모멘텀이 약해지고 있어요. 미래 점수 {scores.get('future', 3):.1f}/6은 아쉬운 수준입니다."
+                return f"모멘텀이 약해지고 있어요. 미래 점수 {future_score:.1f}/6은 아쉬운 수준입니다."
         elif any(w in q_lower for w in ['매수', '들어가']):
-            if scores.get('future', 3) >= 4 and scores.get('past', 3) >= 3.5:
+            if future_score >= 4 and past_score >= 3.5:
                 return f"모멘텀이 살아있을 때 올라타세요! 다만 추세 이탈 시 빠르게 손절해야 합니다."
             else:
                 return f"지금은 확실한 모멘텀이 없어서 진입하기 애매해요."
 
-    # 기본 응답
-    return f"{pattern}, 좋은 질문입니다. {stock_name}에 대해 더 구체적으로 물어봐 주시면 제 관점에서 분석해드릴게요."
+    # === 개선된 기본 응답 (점수 기반 분석) ===
+    # 키워드 매칭이 안 되더라도 트레이더 관점에서 유의미한 분석 제공
+
+    if trader.style == 'value':
+        if value_score >= 4:
+            return f"{pattern}, {stock_name}은 가치점수 {value_score:.1f}/6으로 저평가 매력이 있습니다. 재무건전성({health_score:.1f}/6)도 확인하세요."
+        elif value_score <= 2.5:
+            return f"{pattern}, {stock_name}은 가치점수 {value_score:.1f}/6으로 고평가 구간입니다. 지금은 관망이 좋겠어요."
+        else:
+            return f"{pattern}, {stock_name} 가치점수는 {value_score:.1f}/6으로 적정 수준입니다. 확실한 저평가도 고평가도 아닌 상황이에요."
+
+    elif trader.style == 'growth':
+        if future_score >= 4:
+            return f"{pattern}, {stock_name} 미래 성장 점수 {future_score:.1f}/6으로 전망이 밝습니다! 성장주로서 매력있어요."
+        elif future_score <= 2.5:
+            return f"{pattern}, {stock_name} 미래 점수 {future_score:.1f}/6입니다. 성장 스토리가 약해서 걱정됩니다."
+        else:
+            return f"{pattern}, {stock_name} 성장 전망은 {future_score:.1f}/6으로 보통입니다. 새로운 성장동력이 있는지 확인해보세요."
+
+    elif trader.style == 'technical':
+        trend = '상승' if total_score >= 4 else '하락' if total_score <= 2.5 else '횡보'
+        return f"{pattern}, {stock_name} 종합점수 {total_score:.1f}/6 기준 {trend} 추세로 추정됩니다. 실제 차트 패턴을 꼭 확인하세요."
+
+    elif trader.style == 'contrarian':
+        if total_score >= 4.5:
+            return f"{pattern}, {stock_name} 종합 {total_score:.1f}/6으로 너무 좋아 보입니다. 모두가 좋다고 할 때 오히려 조심해야 해요."
+        elif total_score <= 2:
+            return f"{pattern}, {stock_name} 종합 {total_score:.1f}/6입니다. 모두가 외면할 때가 기회일 수 있지만, 왜 싸졌는지는 파악해야 해요."
+        else:
+            return f"{pattern}, {stock_name}은 극단적 상황이 아니에요. 역발상 전략보다 다른 관점이 더 유효할 수 있습니다."
+
+    elif trader.style == 'quant':
+        tier = '상위권' if avg_score >= 4 else '중위권' if avg_score >= 3 else '하위권'
+        return f"{pattern}, {stock_name} 5팩터 평균 {avg_score:.2f}/6으로 {tier}입니다. 가치 {value_score:.1f}, 미래 {future_score:.1f}, 건전성 {health_score:.1f}/6."
+
+    elif trader.style == 'momentum':
+        if future_score >= 4 and past_score >= 3.5:
+            return f"{pattern}, {stock_name}은 실적 모멘텀이 양호합니다. 과거 {past_score:.1f}, 미래 {future_score:.1f}/6이면 추세 지속 기대돼요."
+        elif future_score <= 2.5:
+            return f"{pattern}, {stock_name} 미래 점수 {future_score:.1f}/6으로 모멘텀이 약해지고 있습니다. 추세 전환을 기다리세요."
+        else:
+            return f"{pattern}, {stock_name} 모멘텀은 중립입니다. 미래 {future_score:.1f}, 과거 {past_score:.1f}/6. 확실한 방향이 나올 때 진입하세요."
+
+    # 최종 폴백 (여기까지 오면 안 됨)
+    return f"{pattern}, {stock_name} 종합 점수는 {total_score:.1f}/6입니다. 제 관점에서 추가 분석이 필요합니다."
 
 
 def generate_trader_debate(
