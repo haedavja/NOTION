@@ -300,7 +300,24 @@ class KRXDataCollector:
         pass
 
     def _get_fallback_stock_list(self, market: str = 'ALL') -> pd.DataFrame:
-        """폴백: 확장된 종목 리스트 (소형주 포함)"""
+        """폴백: JSON 파일 또는 하드코딩 종목 리스트"""
+        # 1. JSON 파일에서 로드 시도
+        json_path = Path(__file__).parent.parent / 'data' / 'korean_stocks.json'
+        if json_path.exists():
+            try:
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    stocks = data.get('stocks', [])
+                    if stocks:
+                        df = pd.DataFrame(stocks)
+                        if market != 'ALL':
+                            df = df[df['market'] == market]
+                        logger.info(f"JSON 파일에서 {len(df)}개 종목 로드")
+                        return df
+            except Exception as e:
+                logger.warning(f"JSON 로드 실패: {e}")
+
+        # 2. 하드코딩 폴백
         # KOSPI 종목
         kospi_stocks = {
             # 대형주 (blue_chips)
