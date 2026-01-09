@@ -41,16 +41,18 @@ def render_notification_history():
     with col1:
         type_filter = st.selectbox(
             "유형",
-            ["전체", "info", "alert", "warning", "error"]
+            ["전체", "info", "alert", "warning", "error"],
+            key="history_type_filter"
         )
     with col2:
         days_filter = st.selectbox(
             "기간",
             [("최근 7일", 7), ("최근 30일", 30), ("전체", 365)],
-            format_func=lambda x: x[0]
+            format_func=lambda x: x[0],
+            key="history_days_filter"
         )
     with col3:
-        keyword = st.text_input("검색", placeholder="키워드")
+        keyword = st.text_input("검색", placeholder="키워드", key="history_keyword")
 
     # 필터링
     filtered = history
@@ -165,15 +167,16 @@ def render_alert_rules():
 
     col1, col2 = st.columns(2)
     with col1:
-        new_symbol = st.text_input("심볼", placeholder="005930.KS")
-        new_name = st.text_input("종목명", placeholder="삼성전자")
+        new_symbol = st.text_input("심볼", placeholder="005930.KS", key="alert_new_symbol")
+        new_name = st.text_input("종목명", placeholder="삼성전자", key="alert_new_name")
     with col2:
         new_condition = st.selectbox(
             "조건",
             [("이상 도달", "above"), ("이하 도달", "below"), ("변동률", "change")],
-            format_func=lambda x: x[0]
+            format_func=lambda x: x[0],
+            key="alert_new_condition"
         )
-        new_target = st.number_input("목표값", min_value=0.0, step=100.0)
+        new_target = st.number_input("목표값", min_value=0.0, step=100.0, key="alert_new_target")
 
     if st.button("알림 추가", type="primary"):
         # 입력 검증
