@@ -7,9 +7,10 @@ import streamlit as st
 from typing import Dict, Optional, List, Tuple
 import hashlib
 import json
+import time
 
 # 캐싱을 위한 간단한 메모리 캐시
-_snowflake_cache: Dict[str, any] = {}
+_snowflake_cache: Dict[str, dict] = {}  # {key: {'data': scores, 'timestamp': time}}
 _cache_ttl = 3600  # 1시간
 
 try:
@@ -190,10 +191,18 @@ def get_snowflake_scores_for_stock(fundamentals, sector: str = "default") -> Opt
     if not data:
         return None
 
-    # 캐시 확인
+    # 캐시 확인 (TTL 적용)
     cache_key = _make_cache_key(data, sector)
+    current_time = time.time()
+
     if cache_key in _snowflake_cache:
-        return _snowflake_cache[cache_key]
+        cached = _snowflake_cache[cache_key]
+        # TTL 확인
+        if current_time - cached['timestamp'] < _cache_ttl:
+            return cached['data']
+        else:
+            # 만료된 캐시 삭제
+            del _snowflake_cache[cache_key]
 
     # 점수 계산
     scores = snowflake_analyzer.calculate_scores(
@@ -203,10 +212,18 @@ def get_snowflake_scores_for_stock(fundamentals, sector: str = "default") -> Opt
 
     # 캐시 저장 (메모리 관리: 최대 100개)
     if len(_snowflake_cache) > 100:
-        # 가장 오래된 항목 제거 (단순 구현)
-        _snowflake_cache.clear()
+        # 만료된 항목 먼저 제거, 그래도 많으면 전체 클리어
+        expired_keys = [
+            k for k, v in _snowflake_cache.items()
+            if current_time - v['timestamp'] >= _cache_ttl
+        ]
+        for k in expired_keys:
+            del _snowflake_cache[k]
 
-    _snowflake_cache[cache_key] = scores
+        if len(_snowflake_cache) > 100:
+            _snowflake_cache.clear()
+
+    _snowflake_cache[cache_key] = {'data': scores, 'timestamp': current_time}
     return scores
 
 
