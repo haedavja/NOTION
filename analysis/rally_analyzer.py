@@ -65,6 +65,13 @@ class RallyInfo:
     inst_net_buy: float  # 기관 순매수
     market_cap: float
     detected_at: datetime = field(default_factory=datetime.now)
+    # 펀더멘털 데이터 (Snowflake 통합용)
+    per: Optional[float] = None
+    pbr: Optional[float] = None
+    roe: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    debt_ratio: Optional[float] = None
+    revenue_growth: Optional[float] = None
 
 
 @dataclass
@@ -197,6 +204,9 @@ class RallyDetector:
                         foreign_net = 0
                         inst_net = 0
 
+                    # 펀더멘털 데이터 조회
+                    fundamentals = self._fetch_fundamentals(krx, code)
+
                     rally = RallyInfo(
                         symbol=code,
                         name=name,
@@ -209,6 +219,12 @@ class RallyDetector:
                         foreign_net_buy=foreign_net,
                         inst_net_buy=inst_net,
                         market_cap=0,
+                        per=fundamentals.get('per'),
+                        pbr=fundamentals.get('pbr'),
+                        roe=fundamentals.get('roe'),
+                        dividend_yield=fundamentals.get('dividend_yield'),
+                        debt_ratio=fundamentals.get('debt_ratio'),
+                        revenue_growth=fundamentals.get('revenue_growth'),
                     )
                     rallies.append(rally)
 
@@ -226,6 +242,35 @@ class RallyDetector:
             rallies.sort(key=lambda x: x.change_5d, reverse=True)
 
         return rallies[:top_n]
+
+    def _fetch_fundamentals(self, krx, code: str) -> Dict:
+        """펀더멘털 데이터 조회"""
+        try:
+            # KRX에서 펀더멘털 데이터 조회 시도
+            if hasattr(krx, 'get_stock_fundamentals'):
+                fund_data = krx.get_stock_fundamentals(code)
+                if fund_data:
+                    return {
+                        'per': fund_data.get('PER'),
+                        'pbr': fund_data.get('PBR'),
+                        'roe': fund_data.get('ROE'),
+                        'dividend_yield': fund_data.get('DIV'),
+                        'debt_ratio': fund_data.get('debt_ratio', 100),
+                        'revenue_growth': fund_data.get('revenue_growth', 0),
+                    }
+
+            # 폴백: 기본 추정값 반환 (실제 구현 시 pykrx.stock.get_market_fundamental_by_ticker 등 사용)
+            return {
+                'per': None,
+                'pbr': None,
+                'roe': None,
+                'dividend_yield': None,
+                'debt_ratio': 100,
+                'revenue_growth': 0,
+            }
+        except Exception as e:
+            logger.debug(f"펀더멘털 조회 오류 ({code}): {e}")
+            return {}
 
     def detect_sector_rallies(self, top_n: int = 5) -> List[Dict]:
         """섹터별 상승 감지"""

@@ -77,6 +77,13 @@ class DeclineInfo:
     inst_net_sell: float  # 기관 순매도
     rsi: float  # RSI 지표
     detected_at: datetime = field(default_factory=datetime.now)
+    # 펀더멘털 데이터 (Snowflake 통합용)
+    per: Optional[float] = None
+    pbr: Optional[float] = None
+    roe: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    debt_ratio: Optional[float] = None
+    revenue_growth: Optional[float] = None
 
 
 @dataclass
@@ -222,6 +229,9 @@ class DeclineDetector:
                         foreign_net_sell = 0
                         inst_net_sell = 0
 
+                    # 펀더멘털 데이터 조회
+                    fundamentals = self._fetch_fundamentals(krx, code)
+
                     decline = DeclineInfo(
                         symbol=code,
                         name=name,
@@ -235,6 +245,12 @@ class DeclineDetector:
                         foreign_net_sell=foreign_net_sell if foreign_net_sell > 0 else 0,
                         inst_net_sell=inst_net_sell if inst_net_sell > 0 else 0,
                         rsi=rsi,
+                        per=fundamentals.get('per'),
+                        pbr=fundamentals.get('pbr'),
+                        roe=fundamentals.get('roe'),
+                        dividend_yield=fundamentals.get('dividend_yield'),
+                        debt_ratio=fundamentals.get('debt_ratio'),
+                        revenue_growth=fundamentals.get('revenue_growth'),
                     )
                     declines.append(decline)
 
@@ -268,6 +284,35 @@ class DeclineDetector:
             return float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
         except Exception:
             return 50.0
+
+    def _fetch_fundamentals(self, krx, code: str) -> Dict:
+        """펀더멘털 데이터 조회"""
+        try:
+            # KRX에서 펀더멘털 데이터 조회 시도
+            if hasattr(krx, 'get_stock_fundamentals'):
+                fund_data = krx.get_stock_fundamentals(code)
+                if fund_data:
+                    return {
+                        'per': fund_data.get('PER'),
+                        'pbr': fund_data.get('PBR'),
+                        'roe': fund_data.get('ROE'),
+                        'dividend_yield': fund_data.get('DIV'),
+                        'debt_ratio': fund_data.get('debt_ratio', 100),
+                        'revenue_growth': fund_data.get('revenue_growth', 0),
+                    }
+
+            # 폴백: 기본값 반환
+            return {
+                'per': None,
+                'pbr': None,
+                'roe': None,
+                'dividend_yield': None,
+                'debt_ratio': 100,
+                'revenue_growth': 0,
+            }
+        except Exception as e:
+            logger.debug(f"펀더멘털 조회 오류 ({code}): {e}")
+            return {}
 
     def detect_sector_declines(self, top_n: int = 5) -> List[Dict]:
         """섹터별 하락 감지"""

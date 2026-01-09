@@ -334,22 +334,29 @@ def render_rally_report(report: RallyReport):
         st.markdown("---")
         st.markdown("### ❄️ 펀더멘털 투자 매력도")
 
-        # 샘플 펀더멘털 데이터 (실제로는 rally_info에서 가져와야 함)
+        # 실제 펀더멘털 데이터 사용 (RallyInfo에서)
         snowflake_data = {
-            'per': getattr(rally, 'per', 15),
-            'pbr': getattr(rally, 'pbr', 1.5),
-            'roe': getattr(rally, 'roe', 10),
-            'dividend_yield': getattr(rally, 'dividend_yield', 2),
-            'debt_ratio': getattr(rally, 'debt_ratio', 100),
-            'revenue_growth': getattr(rally, 'revenue_growth', 5),
+            'per': rally.per if rally.per else 15,
+            'pbr': rally.pbr if rally.pbr else 1.5,
+            'roe': rally.roe if rally.roe else 10,
+            'dividend_yield': rally.dividend_yield if rally.dividend_yield else 2,
+            'debt_ratio': rally.debt_ratio if rally.debt_ratio else 100,
+            'revenue_growth': rally.revenue_growth if rally.revenue_growth else 5,
         }
+
+        # 데이터 유효성 표시
+        has_real_data = rally.per is not None or rally.pbr is not None
+        if has_real_data:
+            st.caption("📊 실제 펀더멘털 데이터 사용")
+        else:
+            st.caption("⚠️ 추정값 사용 (실제 데이터 미제공)")
 
         col_snow, col_insight = st.columns([2, 1])
         with col_snow:
             snowflake_scores = render_mini_snowflake(
                 snowflake_data,
                 name=rally.name,
-                sector='default',
+                sector=normalize_sector(rally.sector) if rally.sector else 'default',
                 show_details=False
             )
         with col_insight:
@@ -668,22 +675,29 @@ def render_decline_report(report: DeclineReport):
         st.markdown("---")
         st.markdown("### ❄️ 펀더멘털 투자 매력도")
 
-        # 하락 종목 펀더멘털 데이터
+        # 실제 펀더멘털 데이터 사용 (DeclineInfo에서)
         snowflake_data = {
-            'per': getattr(decline, 'per', 12),
-            'pbr': getattr(decline, 'pbr', 1.0),
-            'roe': getattr(decline, 'roe', 8),
-            'dividend_yield': getattr(decline, 'dividend_yield', 2.5),
-            'debt_ratio': getattr(decline, 'debt_ratio', 120),
-            'revenue_growth': getattr(decline, 'revenue_growth', 0),
+            'per': decline.per if decline.per else 12,
+            'pbr': decline.pbr if decline.pbr else 1.0,
+            'roe': decline.roe if decline.roe else 8,
+            'dividend_yield': decline.dividend_yield if decline.dividend_yield else 2.5,
+            'debt_ratio': decline.debt_ratio if decline.debt_ratio else 120,
+            'revenue_growth': decline.revenue_growth if decline.revenue_growth else 0,
         }
+
+        # 데이터 유효성 표시
+        has_real_data = decline.per is not None or decline.pbr is not None
+        if has_real_data:
+            st.caption("📊 실제 펀더멘털 데이터 사용")
+        else:
+            st.caption("⚠️ 추정값 사용 (실제 데이터 미제공)")
 
         col_snow, col_insight = st.columns([2, 1])
         with col_snow:
             snowflake_scores = render_mini_snowflake(
                 snowflake_data,
                 name=decline.name,
-                sector='default',
+                sector=normalize_sector(decline.sector) if decline.sector else 'default',
                 show_details=False
             )
         with col_insight:

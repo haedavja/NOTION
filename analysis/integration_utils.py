@@ -5,6 +5,12 @@ Snowflake와 추천 기능을 기존 페이지에 쉽게 통합하기 위한 헬
 
 import streamlit as st
 from typing import Dict, Optional, List, Tuple
+import hashlib
+import json
+
+# 캐싱을 위한 간단한 메모리 캐시
+_snowflake_cache: Dict[str, any] = {}
+_cache_ttl = 3600  # 1시간
 
 try:
     from analysis.snowflake_viz import (
@@ -158,9 +164,17 @@ def render_similar_recommendations(
     return filtered_recs
 
 
+def _make_cache_key(fundamentals: Dict, sector: str) -> str:
+    """캐시 키 생성"""
+    # fundamentals dict를 정렬된 JSON 문자열로 변환 후 해시
+    data_str = json.dumps(fundamentals, sort_keys=True, default=str)
+    return hashlib.md5(f"{data_str}:{sector}".encode()).hexdigest()
+
+
 def get_snowflake_scores_for_stock(fundamentals, sector: str = "default") -> Optional[SnowflakeScores]:
     """
     종목의 Snowflake 점수 계산 (차트 없이 점수만)
+    캐싱 지원으로 동일 데이터 반복 계산 방지
 
     Args:
         fundamentals: 펀더멘털 데이터
@@ -176,10 +190,30 @@ def get_snowflake_scores_for_stock(fundamentals, sector: str = "default") -> Opt
     if not data:
         return None
 
-    return snowflake_analyzer.calculate_scores(
+    # 캐시 확인
+    cache_key = _make_cache_key(data, sector)
+    if cache_key in _snowflake_cache:
+        return _snowflake_cache[cache_key]
+
+    # 점수 계산
+    scores = snowflake_analyzer.calculate_scores(
         fundamentals=data,
         sector=sector
     )
+
+    # 캐시 저장 (메모리 관리: 최대 100개)
+    if len(_snowflake_cache) > 100:
+        # 가장 오래된 항목 제거 (단순 구현)
+        _snowflake_cache.clear()
+
+    _snowflake_cache[cache_key] = scores
+    return scores
+
+
+def clear_snowflake_cache():
+    """Snowflake 캐시 초기화"""
+    global _snowflake_cache
+    _snowflake_cache.clear()
 
 
 def render_snowflake_summary_row(

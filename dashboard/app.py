@@ -131,6 +131,12 @@ try:
 except ImportError:
     SNOWFLAKE_AVAILABLE = False
 
+try:
+    from dashboard.scorecard_page import render_scorecard_page
+    SCORECARD_AVAILABLE = True
+except ImportError:
+    SCORECARD_AVAILABLE = False
+
 # yfinance
 try:
     import yfinance as yf
@@ -672,6 +678,7 @@ def main():
         'technical': True,
         'korea': KOREA_AVAILABLE,
         'snowflake': SNOWFLAKE_AVAILABLE,
+        'scorecard': SCORECARD_AVAILABLE,
         'rally': RALLY_ANALYZER_AVAILABLE,
         'potential': POTENTIAL_ANALYZER_AVAILABLE,
         'portfolio': True,
@@ -768,6 +775,12 @@ def main():
             render_snowflake_page()
         else:
             render_unavailable_page("Snowflake 분석", "필요한 패키지: `plotly`")
+
+    elif current_page == 'scorecard':
+        if SCORECARD_AVAILABLE:
+            render_scorecard_page()
+        else:
+            render_unavailable_page("종합 스코어카드")
 
     elif current_page == 'rally':
         if RALLY_ANALYZER_AVAILABLE:

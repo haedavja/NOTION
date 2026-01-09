@@ -1,5 +1,6 @@
 """
 백테스트 대시보드 페이지
+Snowflake 필터 통합 버전
 """
 
 import streamlit as st
@@ -20,6 +21,142 @@ from backtest.strategies import (
     DualMomentumStrategy
 )
 from backtest.metrics import PerformanceMetrics
+
+# Snowflake 통합 (선택적)
+try:
+    from analysis.integration_utils import get_snowflake_scores_for_stock
+    SNOWFLAKE_FILTER_AVAILABLE = True
+except ImportError:
+    SNOWFLAKE_FILTER_AVAILABLE = False
+
+# yfinance (선택적)
+try:
+    import yfinance as yf
+    YFINANCE_AVAILABLE = True
+except ImportError:
+    YFINANCE_AVAILABLE = False
+
+
+def fetch_snowflake_for_symbol(symbol: str) -> dict:
+    """종목의 Snowflake 점수 조회"""
+    if not SNOWFLAKE_FILTER_AVAILABLE or not YFINANCE_AVAILABLE:
+        return None
+
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+
+        fundamentals = {
+            'per': info.get('trailingPE'),
+            'pbr': info.get('priceToBook'),
+            'roe': info.get('returnOnEquity', 0) * 100 if info.get('returnOnEquity') else None,
+            'dividend_yield': info.get('dividendYield', 0) * 100 if info.get('dividendYield') else 0,
+            'debt_ratio': info.get('debtToEquity', 100),
+            'revenue_growth': info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0,
+        }
+
+        scores = get_snowflake_scores_for_stock(fundamentals)
+        return {
+            'scores': scores,
+            'total': scores.total if scores else 0,
+            'value': scores.value if scores else 0,
+            'future': scores.future if scores else 0,
+            'past': scores.past if scores else 0,
+            'health': scores.health if scores else 0,
+            'dividend': scores.dividend if scores else 0,
+        }
+    except Exception:
+        return None
+
+
+def check_snowflake_filter(symbol: str, filters: dict) -> tuple:
+    """
+    Snowflake 필터 조건 확인
+    Returns: (통과 여부, Snowflake 데이터)
+    """
+    if not filters.get('enabled', False):
+        return True, None
+
+    snowflake_data = fetch_snowflake_for_symbol(symbol)
+
+    if not snowflake_data:
+        # 데이터 없으면 필터 통과 (선택적)
+        return filters.get('allow_no_data', True), None
+
+    scores = snowflake_data
+
+    # 최소 총점 필터
+    if filters.get('min_total', 0) > 0:
+        if scores['total'] < filters['min_total']:
+            return False, snowflake_data
+
+    # 개별 점수 필터
+    for key in ['value', 'future', 'past', 'health', 'dividend']:
+        min_key = f'min_{key}'
+        if filters.get(min_key, 0) > 0:
+            if scores.get(key, 0) < filters[min_key]:
+                return False, snowflake_data
+
+    return True, snowflake_data
+
+
+def render_snowflake_filter_ui() -> dict:
+    """Snowflake 필터 UI 렌더링"""
+    filters = {'enabled': False}
+
+    if not SNOWFLAKE_FILTER_AVAILABLE:
+        return filters
+
+    st.subheader("❄️ Snowflake 필터")
+
+    filters['enabled'] = st.checkbox(
+        "Snowflake 필터 활성화",
+        help="펀더멘털 점수 기반으로 종목을 필터링합니다"
+    )
+
+    if filters['enabled']:
+        st.caption("최소 점수 조건 (0 = 비활성)")
+
+        filters['min_total'] = st.slider(
+            "최소 총점 (6점 만점)",
+            0.0, 6.0, 0.0, 0.5,
+            help="Snowflake 총점 최소값"
+        )
+
+        with st.expander("세부 필터"):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                filters['min_value'] = st.slider(
+                    "가치 (Value)", 0, 6, 0, 1,
+                    help="저평가 여부"
+                )
+                filters['min_future'] = st.slider(
+                    "미래 (Future)", 0, 6, 0, 1,
+                    help="성장 가능성"
+                )
+                filters['min_past'] = st.slider(
+                    "과거 (Past)", 0, 6, 0, 1,
+                    help="과거 실적"
+                )
+
+            with col2:
+                filters['min_health'] = st.slider(
+                    "건전성 (Health)", 0, 6, 0, 1,
+                    help="재무 건전성"
+                )
+                filters['min_dividend'] = st.slider(
+                    "배당 (Dividend)", 0, 6, 0, 1,
+                    help="배당 매력도"
+                )
+
+        filters['allow_no_data'] = st.checkbox(
+            "데이터 없는 종목 포함",
+            value=True,
+            help="Snowflake 데이터가 없는 종목도 백테스트에 포함"
+        )
+
+    return filters
 
 
 def create_equity_chart(equity_curve: pd.Series, title: str = "자산 곡선"):
@@ -265,11 +402,50 @@ def render_backtest_page():
             params['period'] = st.slider("기간", 10, 50, 20)
             params['std_dev'] = st.slider("표준편차", 1.0, 3.0, 2.0, 0.5)
 
+        st.divider()
+
+        # Snowflake 필터 UI
+        snowflake_filters = render_snowflake_filter_ui()
+
+        st.divider()
+
         # 실행 버튼
         run_backtest = st.button("🚀 백테스트 실행", use_container_width=True)
 
     # 메인 영역
     if run_backtest:
+        # Snowflake 필터 체크
+        if snowflake_filters.get('enabled', False):
+            with st.spinner(f"{symbol} Snowflake 점수 확인 중..."):
+                passes_filter, snowflake_data = check_snowflake_filter(symbol, snowflake_filters)
+
+            if not passes_filter:
+                st.error(f"❄️ {symbol}이(가) Snowflake 필터 조건을 충족하지 못합니다.")
+
+                if snowflake_data:
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("총점", f"{snowflake_data['total']:.1f}/6")
+                    with col2:
+                        st.metric("가치", f"{snowflake_data['value']}/6")
+                    with col3:
+                        st.metric("미래", f"{snowflake_data['future']}/6")
+
+                    col4, col5, col6 = st.columns(3)
+                    with col4:
+                        st.metric("과거", f"{snowflake_data['past']}/6")
+                    with col5:
+                        st.metric("건전성", f"{snowflake_data['health']}/6")
+                    with col6:
+                        st.metric("배당", f"{snowflake_data['dividend']}/6")
+
+                st.info("💡 필터 조건을 완화하거나 다른 종목을 선택하세요.")
+                st.stop()
+
+            # 필터 통과 시 Snowflake 정보 표시
+            if snowflake_data:
+                st.success(f"✅ {symbol} Snowflake 필터 통과 (총점: {snowflake_data['total']:.1f}/6)")
+
         with st.spinner("백테스트 실행 중..."):
             result = run_sample_backtest(strategy, symbol, params)
 

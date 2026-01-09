@@ -35,6 +35,17 @@ try:
 except ImportError:
     YFINANCE_AVAILABLE = False
 
+# Snowflake 통합
+try:
+    from analysis.integration_utils import (
+        render_mini_snowflake, get_investment_insight,
+        get_snowflake_scores_for_stock, render_snowflake_summary_row,
+        normalize_sector
+    )
+    SNOWFLAKE_INTEGRATION = True
+except ImportError:
+    SNOWFLAKE_INTEGRATION = False
+
 # 기본 환율 (USD/KRW)
 DEFAULT_EXCHANGE_RATE = 1350.0
 
@@ -691,6 +702,156 @@ def render_allocation_charts(portfolio: Portfolio):
             fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.4)])
             fig.update_layout(title="투자논리별 비중", height=350)
             st.plotly_chart(fig, use_container_width=True)
+
+
+def render_portfolio_snowflake(portfolio: Portfolio):
+    """포트폴리오 Snowflake 요약"""
+    if not SNOWFLAKE_INTEGRATION:
+        return
+
+    st.subheader("❄️ 포트폴리오 펀더멘털 분석")
+
+    if not portfolio.positions:
+        st.info("분석할 포지션이 없습니다.")
+        return
+
+    # 각 포지션의 Snowflake 점수 계산
+    position_scores = []
+    total_weight = 0
+    weighted_score = 0
+
+    for position in portfolio.positions:
+        # yfinance에서 펀더멘털 데이터 조회
+        fundamentals = _fetch_position_fundamentals(position.symbol)
+
+        if fundamentals:
+            scores = get_snowflake_scores_for_stock(fundamentals)
+            if scores:
+                weight = position.weight or 0
+                position_scores.append({
+                    'position': position,
+                    'scores': scores,
+                    'fundamentals': fundamentals,
+                })
+                total_weight += weight
+                weighted_score += scores.total * weight
+
+    if not position_scores:
+        st.warning("펀더멘털 데이터를 조회할 수 없습니다.")
+        return
+
+    # 포트폴리오 가중평균 점수
+    avg_score = weighted_score / total_weight if total_weight > 0 else 0
+
+    # 요약 카드
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if avg_score >= 4.0:
+            grade, emoji = "A", "⭐"
+        elif avg_score >= 3.5:
+            grade, emoji = "B+", "✨"
+        elif avg_score >= 3.0:
+            grade, emoji = "B", "👍"
+        elif avg_score >= 2.5:
+            grade, emoji = "C", "🟡"
+        else:
+            grade, emoji = "D", "⚠️"
+
+        st.metric(
+            "포트폴리오 펀더멘털 등급",
+            f"{emoji} {grade}",
+            f"평균 {avg_score:.1f}/6점"
+        )
+
+    with col2:
+        # 가장 우수한 종목
+        best = max(position_scores, key=lambda x: x['scores'].total)
+        st.metric(
+            "💪 최고 펀더멘털",
+            best['position'].symbol,
+            f"{best['scores'].total:.1f}/6점"
+        )
+
+    with col3:
+        # 가장 약한 종목
+        worst = min(position_scores, key=lambda x: x['scores'].total)
+        st.metric(
+            "⚠️ 주의 필요",
+            worst['position'].symbol,
+            f"{worst['scores'].total:.1f}/6점"
+        )
+
+    # 개별 종목 Snowflake
+    st.markdown("### 📊 종목별 펀더멘털 상세")
+
+    cols = st.columns(min(len(position_scores), 4))
+    for i, ps in enumerate(position_scores[:4]):
+        with cols[i]:
+            position = ps['position']
+            scores = ps['scores']
+
+            # 등급 계산
+            if scores.total >= 4.0:
+                grade_emoji = "⭐"
+            elif scores.total >= 3.0:
+                grade_emoji = "👍"
+            else:
+                grade_emoji = "🟡"
+
+            st.markdown(f"""
+            <div style='text-align: center; padding: 0.5rem;
+                        border: 1px solid #ddd; border-radius: 8px;'>
+                <div style='font-size: 0.9em; font-weight: bold;'>{position.symbol}</div>
+                <div style='font-size: 2em;'>{grade_emoji}</div>
+                <div style='font-size: 1.2em; font-weight: bold;'>{scores.total:.1f}/6</div>
+                <div style='font-size: 0.75em; color: gray;'>
+                    V:{scores.value:.1f} F:{scores.future:.1f} H:{scores.health:.1f}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # 상세 분석 (펼치기)
+    with st.expander("📋 상세 Snowflake 분석", expanded=False):
+        selected = st.selectbox(
+            "종목 선택",
+            [ps['position'].symbol for ps in position_scores],
+            key="snowflake_detail_select"
+        )
+
+        for ps in position_scores:
+            if ps['position'].symbol == selected:
+                render_mini_snowflake(
+                    ps['fundamentals'],
+                    name=ps['position'].name,
+                    show_details=True
+                )
+                st.markdown("**💡 투자 인사이트**")
+                st.markdown(get_investment_insight(ps['scores']))
+                break
+
+
+def _fetch_position_fundamentals(symbol: str) -> dict:
+    """포지션의 펀더멘털 데이터 조회"""
+    if not YFINANCE_AVAILABLE:
+        return {}
+
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+
+        return {
+            'per': info.get('trailingPE') or info.get('forwardPE'),
+            'pbr': info.get('priceToBook'),
+            'roe': info.get('returnOnEquity', 0) * 100 if info.get('returnOnEquity') else None,
+            'dividend_yield': info.get('dividendYield', 0) * 100 if info.get('dividendYield') else 0,
+            'debt_ratio': info.get('debtToEquity', 100),
+            'revenue_growth': info.get('revenueGrowth', 0) * 100 if info.get('revenueGrowth') else 0,
+            'operating_margin': info.get('operatingMargins', 0) * 100 if info.get('operatingMargins') else 10,
+        }
+    except Exception as e:
+        logger.debug(f"펀더멘털 조회 실패 ({symbol}): {e}")
+        return {}
 
 
 def render_thesis_evaluation(portfolio: Portfolio):
@@ -1480,6 +1641,8 @@ def render_portfolio_page():
         render_positions_table(portfolio)
         st.divider()
         render_allocation_charts(portfolio)
+        st.divider()
+        render_portfolio_snowflake(portfolio)
 
     with tab2:
         render_risk_alerts(portfolio)
