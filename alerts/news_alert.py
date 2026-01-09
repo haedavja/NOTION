@@ -7,7 +7,7 @@ import time
 import logging
 import threading
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional, Callable, Tuple
 from dataclasses import dataclass, field
 import hashlib
 import json
@@ -319,7 +319,3 @@ class NewsAlertSystem:
             'telegram_enabled': self.telegram.enabled,
             'discord_enabled': self.discord.enabled,
         }
-
-
-# 사용 가능한 타입 힌트를 위한 임포트
-from typing import Tuple

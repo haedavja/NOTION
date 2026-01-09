@@ -1,0 +1,48 @@
+# ===========================================
+# NOTION 시장 예측 시스템 Docker Compose
+# ===========================================
+#
+# 실행: docker-compose up -d
+# 중지: docker-compose down
+# 로그: docker-compose logs -f
+#
+
+version: '3.8'
+
+services:
+  notion-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notion-market-predictor
+    ports:
+      - "8501:8501"
+    environment:
+      # API 키 (환경변수 또는 .env 파일에서)
+      - FRED_API_KEY=${FRED_API_KEY:-}
+      - NEWS_API_KEY=${NEWS_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # 알림 설정
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      # 대시보드 설정
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-}
+    volumes:
+      # 데이터 영속성
+      - notion-data:/home/appuser/.notion_portfolio
+      # 캐시 영속성
+      - notion-cache:/home/appuser/.notion_portfolio/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  notion-data:
+    name: notion-portfolio-data
+  notion-cache:
+    name: notion-portfolio-cache

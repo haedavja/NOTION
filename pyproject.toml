@@ -1,0 +1,111 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notion-market-predictor"
+version = "1.0.0"
+description = "거시경제 기반 시장 예측 시스템"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "NOTION Team"}
+]
+keywords = ["stock", "market", "prediction", "macroeconomic", "analysis"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+dependencies = [
+    # Data Collection
+    "yfinance>=0.2.36",
+    "fredapi>=0.5.1",
+    "newsapi-python>=0.2.7",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "feedparser>=6.0.10",
+
+    # Data Processing
+    "pandas>=2.1.0",
+    "numpy>=1.24.0",
+
+    # ML & NLP (optional heavy deps)
+    "scikit-learn>=1.3.0",
+
+    # Visualization & Dashboard
+    "streamlit>=1.29.0",
+    "plotly>=5.18.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "schedule>=1.2.0",
+
+    # Security
+    "bcrypt>=4.0.0",
+
+    # Korean Stocks
+    "pykrx>=1.0.45",
+]
+
+[project.optional-dependencies]
+ml = [
+    "xgboost>=2.0.0",
+    "transformers>=4.36.0",
+    "torch>=2.1.0",
+]
+ai = [
+    "openai>=1.6.0",
+]
+full = [
+    "notion-market-predictor[ml,ai]",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+]
+
+[project.scripts]
+notion = "main:main"
+notion-dashboard = "dashboard.app:main"
+
+[project.urls]
+Homepage = "https://github.com/haedavja/NOTION"
+Documentation = "https://github.com/haedavja/NOTION/docs"
+Repository = "https://github.com/haedavja/NOTION"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "analysis*",
+    "alerts*",
+    "config*",
+    "dashboard*",
+    "data*",
+    "korea*",
+    "portfolio*",
+    "prediction*",
+    "utils*",
+]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.yaml", "*.yml"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
