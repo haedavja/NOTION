@@ -674,7 +674,8 @@ def _get_stock_fundamentals_for_snowflake(code: str) -> Optional[Dict]:
                     # 주가 변화를 성장률 추정에 활용 (보수적으로 50% 적용)
                     revenue_growth = price_change * 0.3
                     earnings_growth = price_change * 0.5
-        except Exception:
+        except Exception as growth_err:
+            # 성장률 추정 실패 시 기본값 0 유지
             pass
 
         # PBR로 부채비율 추정 (PBR 높으면 보통 저부채, 낮으면 고부채 경향)
@@ -732,7 +733,9 @@ def _get_stock_fundamentals_for_snowflake(code: str) -> Optional[Dict]:
         }
 
     except Exception as e:
-        pass
+        # 펀더멘털 조회 실패 시 폴백 사용
+        import logging
+        logging.debug(f"Snowflake 펀더멘털 조회 실패 ({code}): {e}")
 
     # 폴백: 코드 해시 기반으로 다양한 기본값 생성 (완전 고정 방지)
     code_hash = sum(ord(c) for c in code) % 100

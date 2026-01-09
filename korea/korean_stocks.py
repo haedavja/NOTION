@@ -88,6 +88,15 @@ class KoreanStockAnalyzer:
                     eps=None, bps=None, dividend_yield=None, roe=None
                 )
 
+            # 값 추출
+            eps = fundamental['EPS'].iloc[-1] if 'EPS' in fundamental.columns else None
+            bps = fundamental['BPS'].iloc[-1] if 'BPS' in fundamental.columns else None
+
+            # ROE 계산: EPS/BPS * 100 (순이익/순자산)
+            roe = None
+            if eps and bps and bps > 0:
+                roe = (eps / bps) * 100
+
             return StockFundamentals(
                 code=code,
                 name=name,
@@ -95,10 +104,10 @@ class KoreanStockAnalyzer:
                 market_cap=market_cap,
                 per=fundamental['PER'].iloc[-1] if 'PER' in fundamental.columns else None,
                 pbr=fundamental['PBR'].iloc[-1] if 'PBR' in fundamental.columns else None,
-                eps=fundamental['EPS'].iloc[-1] if 'EPS' in fundamental.columns else None,
-                bps=fundamental['BPS'].iloc[-1] if 'BPS' in fundamental.columns else None,
+                eps=eps,
+                bps=bps,
                 dividend_yield=fundamental['DIV'].iloc[-1] if 'DIV' in fundamental.columns else None,
-                roe=None,  # 별도 계산 필요
+                roe=roe,
             )
 
         except Exception as e:

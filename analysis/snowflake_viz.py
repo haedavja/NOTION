@@ -222,15 +222,15 @@ class SnowflakeAnalyzer:
         # 배당수익률
         div_yield = data.get('dividend_yield') or data.get('배당수익률', 0)
         if div_yield > 5:
-            score += 2.0
+            score += 1.5  # 고배당 (최대 1.5점으로 조정)
         elif div_yield > 3:
-            score += 1.5
-        elif div_yield > 2:
             score += 1.0
+        elif div_yield > 2:
+            score += 0.7
         elif div_yield > 1:
-            score += 0.5
+            score += 0.3
         elif div_yield == 0:
-            score -= 1.0  # 무배당
+            score -= 0.3  # 무배당 (성장주는 배당 없는 것이 정상, 페널티 완화)
 
         # 배당성향 (적정 수준 30-60%가 좋음)
         payout = data.get('payout_ratio') or data.get('배당성향', 0)
