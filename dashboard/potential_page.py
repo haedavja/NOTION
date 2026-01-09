@@ -38,6 +38,16 @@ try:
 except ImportError:
     KRX_AVAILABLE = False
 
+# Snowflake 통합
+try:
+    from analysis.integration_utils import (
+        render_mini_snowflake, get_investment_insight,
+        get_snowflake_scores_for_stock, normalize_sector
+    )
+    SNOWFLAKE_INTEGRATION = True
+except ImportError:
+    SNOWFLAKE_INTEGRATION = False
+
 
 def render_potential_dashboard():
     """잠재적 급등/급락 분석 대시보드 렌더링"""
@@ -577,6 +587,48 @@ def render_detailed_analysis(analysis: PotentialAnalysis):
     # 상승/하락 요인 비교 차트
     if analysis.bullish_catalysts or analysis.bearish_catalysts:
         render_catalyst_comparison_chart(analysis)
+
+    # ===== Snowflake 투자 매력도 (통합) =====
+    if SNOWFLAKE_INTEGRATION:
+        st.markdown("### ❄️ 펀더멘털 투자 매력도")
+
+        # 분석에서 재무 데이터 추출 (실제로는 analysis에서 가져와야 함)
+        snowflake_data = {
+            'per': getattr(analysis, 'per', 15),
+            'pbr': getattr(analysis, 'pbr', 1.5),
+            'roe': getattr(analysis, 'roe', 10),
+            'dividend_yield': getattr(analysis, 'dividend_yield', 2),
+            'debt_ratio': getattr(analysis, 'debt_ratio', 100),
+            'revenue_growth': getattr(analysis, 'revenue_growth', 5),
+        }
+
+        col_snow, col_insight = st.columns([2, 1])
+
+        with col_snow:
+            snowflake_scores = render_mini_snowflake(
+                snowflake_data,
+                name=analysis.name,
+                sector='default',
+                show_details=False
+            )
+
+        with col_insight:
+            if snowflake_scores:
+                st.markdown("**💡 투자 인사이트**")
+                insight = get_investment_insight(snowflake_scores)
+                st.markdown(insight)
+
+                # 잠재적 요인과의 연계 인사이트
+                if analysis.bullish_score > analysis.bearish_score:
+                    if snowflake_scores.value >= 3.5:
+                        st.success("📈 밸류에이션 + 상승 촉매 시너지 기대")
+                    elif snowflake_scores.value < 2.5:
+                        st.warning("⚠️ 상승 촉매 있으나 밸류 부담")
+                else:
+                    if snowflake_scores.health < 2.5:
+                        st.error("🚨 하락 촉매 + 재무 리스크 주의")
+                    elif snowflake_scores.value >= 4.0:
+                        st.info("💡 하락 시 저가 매수 기회 가능")
 
     # 상승 촉매 상세
     st.markdown("### 🚀 상승 촉매")

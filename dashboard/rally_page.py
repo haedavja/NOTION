@@ -33,6 +33,16 @@ except ImportError as e:
     DECLINE_ANALYZER_AVAILABLE = False
     print(f"Decline Analyzer import error: {e}")
 
+# Snowflake 통합
+try:
+    from analysis.integration_utils import (
+        render_mini_snowflake, get_investment_insight,
+        get_snowflake_scores_for_stock, normalize_sector
+    )
+    SNOWFLAKE_INTEGRATION = True
+except ImportError:
+    SNOWFLAKE_INTEGRATION = False
+
 
 def render_rally_dashboard():
     """Rally & Decline Analyzer 대시보드 렌더링"""
@@ -318,6 +328,35 @@ def render_rally_report(report: RallyReport):
             color = "green" if score >= 60 else "orange" if score >= 40 else "red"
             st.markdown(f"**{label}**: {score:.0f}점")
             st.progress(score / 100)
+
+    # ===== Snowflake 투자 매력도 (통합) =====
+    if SNOWFLAKE_INTEGRATION:
+        st.markdown("---")
+        st.markdown("### ❄️ 펀더멘털 투자 매력도")
+
+        # 샘플 펀더멘털 데이터 (실제로는 rally_info에서 가져와야 함)
+        snowflake_data = {
+            'per': getattr(rally, 'per', 15),
+            'pbr': getattr(rally, 'pbr', 1.5),
+            'roe': getattr(rally, 'roe', 10),
+            'dividend_yield': getattr(rally, 'dividend_yield', 2),
+            'debt_ratio': getattr(rally, 'debt_ratio', 100),
+            'revenue_growth': getattr(rally, 'revenue_growth', 5),
+        }
+
+        col_snow, col_insight = st.columns([2, 1])
+        with col_snow:
+            snowflake_scores = render_mini_snowflake(
+                snowflake_data,
+                name=rally.name,
+                sector='default',
+                show_details=False
+            )
+        with col_insight:
+            if snowflake_scores:
+                st.markdown("**💡 투자 인사이트**")
+                insight = get_investment_insight(snowflake_scores)
+                st.markdown(insight)
 
     st.markdown("---")
 
@@ -623,6 +662,40 @@ def render_decline_report(report: DeclineReport):
 
         if recovery.target_price:
             st.info(f"🎯 목표가: {recovery.target_price:,.0f}원 ({recovery.time_horizon})")
+
+    # ===== Snowflake 투자 매력도 (통합) =====
+    if SNOWFLAKE_INTEGRATION:
+        st.markdown("---")
+        st.markdown("### ❄️ 펀더멘털 투자 매력도")
+
+        # 하락 종목 펀더멘털 데이터
+        snowflake_data = {
+            'per': getattr(decline, 'per', 12),
+            'pbr': getattr(decline, 'pbr', 1.0),
+            'roe': getattr(decline, 'roe', 8),
+            'dividend_yield': getattr(decline, 'dividend_yield', 2.5),
+            'debt_ratio': getattr(decline, 'debt_ratio', 120),
+            'revenue_growth': getattr(decline, 'revenue_growth', 0),
+        }
+
+        col_snow, col_insight = st.columns([2, 1])
+        with col_snow:
+            snowflake_scores = render_mini_snowflake(
+                snowflake_data,
+                name=decline.name,
+                sector='default',
+                show_details=False
+            )
+        with col_insight:
+            if snowflake_scores:
+                st.markdown("**💡 투자 인사이트**")
+                insight = get_investment_insight(snowflake_scores)
+                st.markdown(insight)
+                # 하락 종목 특별 인사이트
+                if snowflake_scores.value >= 4.0:
+                    st.success("🎯 밸류에이션 매력 있음 - 반등 시 주목")
+                if snowflake_scores.health < 2.5:
+                    st.warning("⚠️ 재무 건전성 주의 필요")
 
     st.markdown("---")
 

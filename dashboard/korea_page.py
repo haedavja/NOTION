@@ -22,6 +22,17 @@ try:
 except ImportError:
     KEYWORDS_AVAILABLE = False
 
+# Snowflake 및 추천 기능 통합
+try:
+    from analysis.integration_utils import (
+        render_mini_snowflake, render_similar_recommendations,
+        get_investment_insight, get_snowflake_scores_for_stock,
+        normalize_sector
+    )
+    INTEGRATION_AVAILABLE = True
+except ImportError:
+    INTEGRATION_AVAILABLE = False
+
 
 def get_market_keywords():
     """현재 금융 시장 키워드 (한국 시장 중심)"""
@@ -444,6 +455,65 @@ def render_korea_page():
                         st.error(f"🔴 {signal}")
                     else:
                         st.info(f"🟡 {signal}")
+
+                # ===== Snowflake 투자 매력도 분석 (통합) =====
+                if INTEGRATION_AVAILABLE:
+                    st.divider()
+                    st.subheader("❄️ 투자 매력도 분석")
+
+                    # 섹터 정규화 (종목 이름에서 추론)
+                    stock_sector = 'default'
+                    name_lower = analysis.name.lower()
+                    if '반도체' in name_lower or '하이닉스' in name_lower:
+                        stock_sector = '반도체'
+                    elif '전자' in name_lower or '삼성' in name_lower:
+                        stock_sector = 'IT'
+                    elif '자동차' in name_lower or '현대' in name_lower or '기아' in name_lower:
+                        stock_sector = '자동차'
+                    elif '바이오' in name_lower or '셀트리온' in name_lower:
+                        stock_sector = '바이오'
+                    elif '은행' in name_lower or '금융' in name_lower:
+                        stock_sector = '금융'
+                    elif '배터리' in name_lower or '에너지' in name_lower:
+                        stock_sector = '2차전지'
+
+                    sector = normalize_sector(stock_sector)
+
+                    # Snowflake 분석 데이터 준비
+                    snowflake_data = {
+                        'per': fund.per,
+                        'pbr': fund.pbr,
+                        'roe': getattr(fund, 'roe', None),
+                        'dividend_yield': fund.dividend_yield,
+                        'debt_ratio': getattr(fund, 'debt_ratio', 100),
+                        'current_ratio': getattr(fund, 'current_ratio', 1.5),
+                        'revenue_growth': getattr(fund, 'revenue_growth', 0),
+                        'operating_margin': getattr(fund, 'operating_margin', 10),
+                    }
+
+                    col_snow, col_insight = st.columns([2, 1])
+
+                    with col_snow:
+                        scores = render_mini_snowflake(
+                            snowflake_data,
+                            name=analysis.name,
+                            sector=sector,
+                            show_details=True
+                        )
+
+                    with col_insight:
+                        if scores:
+                            st.markdown("### 💡 투자 인사이트")
+                            insight = get_investment_insight(scores)
+                            st.markdown(insight)
+
+                    # 유사 종목 추천
+                    st.divider()
+                    render_similar_recommendations(
+                        current_code=stock_code,
+                        current_sector=stock_sector,
+                        limit=3
+                    )
 
                 # 차트
                 st.divider()
